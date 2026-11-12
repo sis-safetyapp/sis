@@ -273,17 +273,31 @@ function renderSetup() {
 };</pre><p class="small muted">The setup guide (SETUP.md) walks through it step by step.</p></section>`;
 }
 
-function renderWelcome() {
+function renderWelcome(user) {
   $('#tabs').hidden = true;
-  $('#main').innerHTML = `<section class="screen" style="padding-top:12px">
-    <div class="logo-big">${LOGO(120, 86)}</div>
-    <div class="stack"><p class="eyebrow">Sis · your sisterhood</p><h1>Step out bravely, with people you trust</h1>
-    <p class="muted">Check in on each other, pick places other women rate as safe, and find your circle. Day and night.</p></div>
-    <div class="field"><label for="wName">Your first name</label><input id="wName" maxlength="40" autocomplete="given-name" placeholder="e.g. Jana" value="${esc(ls.get('name') || '')}"></div>
+  const head = `<div class="logo-big">${LOGO(120, 86)}</div>
+    <div class="stack"><p class="eyebrow">Sis · beta</p><h1>Step out bravely, with people you trust</h1>
+    <p class="muted">Check in on each other, pick places other women rate as safe, and find your circle. Day and night.</p></div>`;
+  const beta = `<div class="note info">${ic('shieldok')}<span>This is a test version. sis. is not an emergency service: if you are in danger, call 112.</span></div>`;
+  if (!user) {
+    $('#main').innerHTML = `<section class="screen" style="padding-top:12px">${head}
+    <button class="btn block" data-act="google">Continue with Google</button>${beta}</section>`;
+    return;
+  }
+  const meta = user.user_metadata || {};
+  const guess = ls.get('name') || String(meta.full_name || meta.name || '').split(' ')[0];
+  $('#main').innerHTML = `<section class="screen" style="padding-top:12px">${head}
+    <div class="field"><label for="wName">Your first name</label><input id="wName" maxlength="40" autocomplete="given-name" placeholder="e.g. Jana" value="${esc(guess)}"></div>
     <div class="field"><label for="wPhone">Phone (optional, so your sisters can call you)</label><input id="wPhone" type="tel" maxlength="30" autocomplete="tel" placeholder="+372 ..."></div>
-    <button class="btn block" data-act="welcome">Continue</button>
-    <div class="note info">${ic('shieldok')}<span>Prototype: anyone with the link can join. Verification with Smart-ID comes in the next version.</span></div>
+    <button class="btn block" data-act="welcome">Continue</button>${beta}
   </section>`;
+}
+
+async function doGoogle() {
+  const join = new URLSearchParams(location.search).get('join');
+  if (join) ls.set('pendingJoin', join);
+  const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${location.origin}${location.pathname}?live=1` } });
+  if (error) fail(error);
 }
 
 async function doWelcome() {
@@ -291,12 +305,8 @@ async function doWelcome() {
   if (!name) return toast('Add your first name', 'alert');
   const btn = document.querySelector('[data-act="welcome"]'); btn.disabled = true;
   try {
-    let { data: { session } } = await sb.auth.getSession();
-    if (!session) {
-      const { data, error } = await sb.auth.signInAnonymously();
-      if (error) throw new Error(error.message.includes('nonymous') ? 'Anonymous sign-ins are off. Turn them on in Supabase (Authentication → Sign In / Providers).' : error.message);
-      session = data.session;
-    }
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) return renderWelcome();
     const { error } = await sb.from('profiles').upsert({ id: session.user.id, name, phone });
     if (error) throw error;
     ls.set('name', name);
@@ -308,11 +318,13 @@ async function afterAuth(user) {
   S.user = user;
   const { data: p, error } = await sb.from('profiles').select('name, phone').eq('id', user.id).maybeSingle();
   if (error) throw error;
-  if (!p) return renderWelcome();
+  if (!p) return renderWelcome(user);
   S.name = p.name; S.phone = p.phone || '';
   await loadGroups();
-  const join = new URLSearchParams(location.search).get('join');
-  if (join) { history.replaceState(null, '', location.pathname); await joinGroup(join); }
+  const join = new URLSearchParams(location.search).get('join') || ls.get('pendingJoin');
+  ls.set('pendingJoin', '');
+  history.replaceState(null, '', `${location.pathname}?live=1`);
+  if (join) await joinGroup(join);
   $('#tabs').hidden = false;
   render();
   const me = myRow();
@@ -973,6 +985,7 @@ document.addEventListener('click', async (e) => {
   try {
     switch (a) {
       case 'welcome': return doWelcome();
+      case 'google': return doGoogle();
       case 'mode': if (S.mode !== arg) { S.mode = arg; S.auto = false; ls.set('auto', '0'); ls.set('mode', arg); applyMode(); render(); toast(arg === 'night' ? 'Night mode on. Safety tools come first.' : 'Day mode on.', arg === 'night' ? 'moon' : 'sun'); } return;
       case 'tab': closeSheet(); return go(arg);
       case 'close': return closeSheet();
