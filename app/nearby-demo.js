@@ -445,7 +445,7 @@
     } else {
       const near = nearby();
       body = '<div class="map" id="nearbyHomeMap" style="height:220px"></div>' +
-        '<p class="small muted"><b>' + near.length + ' verified sister' + (near.length === 1 ? '' : 's') + ' within 1 km</b>' +
+        '<p class="small muted"><b>' + near.length + ' sister' + (near.length === 1 ? '' : 's') + ' within 1 km</b>' +
         (near.length ? ' · ' + near.map(function (p) { return esc(p.name) + ' ' + dist(p.distance); }).join(', ') : '') + '</p>' +
         '<button class="btn block" data-act="nearby-text"' + (near.length ? '' : ' disabled') + '>' + ic('users') + 'Text a sister nearby</button>';
     }
@@ -573,7 +573,7 @@
     if (!el) return;
     const act = el.dataset.act;
     if (act === 'nearby-text') {
-      textSheet('Text a sister nearby', nearby(), function (p) { return dist(p.distance) + ' away · verified'; });
+      textSheet('Text a sister nearby', nearby(), function (p) { return dist(p.distance) + ' away'; });
     } else if (act.indexOf('circle-text:') === 0) {
       const id = act.substring('circle-text:'.length);
       const one = circle().filter(function (p) { return p.id === id; });

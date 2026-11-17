@@ -1,0 +1,10 @@
+{
+  "name": "Sis",
+  "short_name": "Sis",
+  "description": "Safety and sisterhood for women, day and night.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#121022",
+  "theme_color": "#6A3FD0",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

@@ -83,7 +83,9 @@ const sheetHead = (title) => `<div class="row between"><h2>${title}</h2><button 
 function fail(e) { console.error(e); toast(e?.message ? `Something went wrong: ${e.message}` : 'Something went wrong. Try again.', 'alert'); }
 
 /* ---------------- demo data: opens without sign-up (add ?live=1 for the real database) ---------------- */
-const LIVE = /[?&](live|join)=/.test(location.search);
+// config.js mode: 'demo' (the public demo, never signs in) or 'live' (the tester app with Google sign-in).
+const SIS_MODE = (window.SIS_CONFIG || {}).mode;
+const LIVE = SIS_MODE === 'live' || (SIS_MODE !== 'demo' && /[?&](live|join)=/.test(location.search));
 function demoDb() {
   const now = Date.now(), iso = (min) => new Date(now + min * 60000).toISOString();
   const at = (north, east) => ({ lat: 59.4372 + north / 111320, lng: 24.7454 + east / 56640 });
@@ -98,7 +100,7 @@ function demoDb() {
     ],
     group_members: [
       member('g1', 'me', ls.get('name') || 'Jana', {}),
-      member('g1', 'u-reem', 'Reem', { status: 'on_way', walk_to: 'Home', walk_deadline: iso(38), sharing: true, ...at(120, -90), accuracy: 12, located_at: iso(-1) }),
+      member('g1', 'u-reem', 'Anna', { status: 'on_way', walk_to: 'Home', walk_deadline: iso(38), sharing: true, ...at(120, -90), accuracy: 12, located_at: iso(-1) }),
       member('g1', 'u-swathi', 'Swathi', { place: 'Old Town', sharing: true, ...at(-180, 160), accuracy: 15, located_at: iso(-3) }),
       member('g2', 'me', ls.get('name') || 'Jana', {}),
       member('g2', 'u-swathi', 'Swathi', { place: 'Kuu Bar', sharing: true, ...at(-30, 40), accuracy: 15, located_at: iso(-2) })
@@ -323,7 +325,7 @@ async function afterAuth(user) {
   await loadGroups();
   const join = new URLSearchParams(location.search).get('join') || ls.get('pendingJoin');
   ls.set('pendingJoin', '');
-  history.replaceState(null, '', `${location.pathname}?live=1`);
+  if (LIVE) history.replaceState(null, '', `${location.pathname}?live=1`);
   if (join) await joinGroup(join);
   $('#tabs').hidden = false;
   render();

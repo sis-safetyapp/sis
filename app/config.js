@@ -4,3 +4,4 @@ window.SIS_CONFIG = {
   supabaseUrl: "https://kpnmpdotkwpqnfzuhrnt.supabase.co",
   supabaseAnonKey: "sb_publishable_9uKwxMt2fT5BSiGPG8jFLA_pNvaPjle"
 };
+window.SIS_CONFIG.mode = "live";
