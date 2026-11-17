@@ -228,3 +228,12 @@ details p { padding: 0 22px 20px; color: var(--muted); }
 .nearby h3 { margin-top: 6px; font-size: 24px; }
 .nearby p:last-child { margin-top: 8px; max-width: 720px; color: var(--muted); }
 @media (max-width: 520px) { .nearby { grid-template-columns: 1fr; padding: 22px; } }
+
+/* status bar so the screens read like a real phone */
+.mock-phone .screen { position: relative; overflow: hidden; container-type: inline-size; background-size: auto 93.5%; background-position: center bottom; background-repeat: no-repeat; }
+.mock-phone .shot-day { background-color: #f6f4ee; color: #1b1630; }
+.mock-phone .shot-night { background-color: #130f23; color: #fff; }
+.sbar { position: absolute; top: 0; left: 0; right: 0; height: 6.5%; display: flex; align-items: center; justify-content: space-between; padding: 0 8.5cqw 0 10cqw; font-family: var(--body); font-weight: 700; font-size: 6.4cqw; letter-spacing: -.01em; }
+.sbar .island { position: absolute; left: 50%; top: 22%; width: 31%; height: 56%; transform: translateX(-50%); border-radius: 99px; background: #000; }
+.sbar .sb-ic { display: flex; } .sbar svg { width: 21cqw; height: auto; display: block; }
+@media (max-width: 900px) { .phones { width: 100%; max-width: 440px; justify-content: center; } }
