@@ -100,7 +100,7 @@ function demoDb() {
     ],
     group_members: [
       member('g1', 'me', ls.get('name') || 'Jana', {}),
-      member('g1', 'u-reem', 'Anna', { status: 'on_way', walk_to: 'Home', walk_deadline: iso(38), sharing: true, ...at(120, -90), accuracy: 12, located_at: iso(-1) }),
+      member('g1', 'u-reem', 'Nika', { status: 'on_way', walk_to: 'Home', walk_deadline: iso(38), sharing: true, ...at(120, -90), accuracy: 12, located_at: iso(-1) }),
       member('g1', 'u-swathi', 'Swathi', { place: 'Old Town', sharing: true, ...at(-180, 160), accuracy: 15, located_at: iso(-3) }),
       member('g2', 'me', ls.get('name') || 'Jana', {}),
       member('g2', 'u-swathi', 'Swathi', { place: 'Kuu Bar', sharing: true, ...at(-30, 40), accuracy: 15, located_at: iso(-2) })
