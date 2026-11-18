@@ -724,7 +724,7 @@ function meScreen() {
       <button class="item" data-act="toggle-auto"><span class="grow"><span class="t">Night mode at sunset</span><br><span class="s">Switches on by itself after dark</span></span><span class="toggle ${S.auto ? 'on' : ''}" role="switch" aria-checked="${S.auto}"></span></button>
       <button class="item" data-act="notify"><span class="grow"><span class="t">Alerts</span><br><span class="s">${notif === 'granted' ? 'On. You get a notification while Sis is open.' : notif === 'denied' ? 'Blocked in browser settings.' : notif === 'unsupported' ? 'Not supported in this browser. Add Sis to your home screen.' : 'Tap to turn on.'}</span></span>${notif === 'granted' ? `<span class="pill safe">${ic('check')}On</span>` : ''}</button>
     </div></div>
-    ${LIVE ? '<button class="btn ghost block" data-act="signout">Sign out on this device</button>' : ''}
+    ${LIVE ? '<button class="btn ghost block" data-act="signout">Sign out on this device</button><button class="btn ghost block" data-act="delete-account">Delete my account and data</button>' : ''}
   </section>`;
 }
 
@@ -1072,6 +1072,14 @@ document.addEventListener('click', async (e) => {
       }
       case 'toggle-auto': S.auto = !S.auto; ls.set('auto', S.auto ? '1' : '0'); if (S.auto) S.mode = autoMode(); return render();
       case 'signout': if (!el.dataset.sure) { el.dataset.sure = '1'; el.textContent = 'Tap again to sign out. Your groups stay, but this device forgets you.'; return; } stopSharing(true); await sb.auth.signOut(); location.reload(); return;
+      case 'delete-account': {
+        if (!el.dataset.sure) { el.dataset.sure = '1'; el.textContent = 'Tap again to permanently delete your account and all your data. This cannot be undone.'; return; }
+        stopSharing(true);
+        const { error } = await sb.rpc('delete_my_account'); if (error) return fail(error);
+        try { await sb.auth.signOut(); } catch (e) { /* account is already gone */ }
+        try { Object.keys(localStorage).filter((k) => k.startsWith('sis.')).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* storage blocked */ }
+        location.reload(); return;
+      }
     }
   } catch (err) { fail(err); }
 });
