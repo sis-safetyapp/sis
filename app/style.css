@@ -220,8 +220,6 @@ pre.code{white-space:pre-wrap;background:var(--surface-2);padding:12px;border-ra
 #sisDemoMapStatus.gps-error {color:var(--danger);font-weight:600}
 .sis-demo-map-controls {display:flex;gap:6px;flex-wrap:wrap}
 .sis-demo-map-controls .btn {flex:1 0 auto;white-space:nowrap}
-.sos-demo-alert .stack {width:100%}
-.sos-demo-alert .stack > * {min-width:0}
 #sisDemoStatus {line-height:1.65;overflow-wrap:anywhere}
 #sisDemoStatus .gps-live {color:var(--safe);font-size:12px;letter-spacing:.03em}
 #sisDemoStatus.gps-error {color:var(--danger);font-weight:600}
@@ -229,13 +227,6 @@ pre.code{white-space:pre-wrap;background:var(--surface-2);padding:12px;border-ra
 #sisDemoContacts .item .pill {font-size:10px;padding:2px 6px;margin-left:3px;vertical-align:middle}
 #sisDemoContacts .item .btn {white-space:nowrap}
 
-/* Night-only, locally simulated SOS group */
-.sos-demo-card{border:2px dashed var(--accent);background:var(--accent-soft)}
-.sos-demo-card .sos-demo-member{background:var(--surface);border-radius:14px;border:1px solid var(--line)}
-.sos-demo-alert{border:2px solid #fff;box-shadow:0 4px 15px rgba(0,0,0,.14)}
-.sos-demo-alert .btn.white{color:#AF1D34;background:#fff;text-decoration:none}
-.sos-demo-card .pill{flex:none}
-.sos-demo-alert strong{flex:1}
 
 /* SOS in the tab bar */
 nav.tabs{grid-template-columns:repeat(5,1fr);align-items:end}
