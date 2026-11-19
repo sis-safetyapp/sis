@@ -51,7 +51,7 @@ let sb = null;
 const S = {
   user: null, name: '', phone: '', mode: 'day', auto: true, tab: 'home',
   groups: [], gid: null, group: null, members: [],
-  places: [], placeFilter: 'All', q: '', events: [], threads: [], seg: 'events',
+  places: [], placeFilter: 'All', q: '', events: [], threads: [], seg: 'events', admin: false, adminChecked: false,
   watchId: null, lastSent: null, alerted: new Set(), wake: null, addMode: false, review: null
 };
 const GOOD_TAGS = ['Staff responsive', 'Well-lit street', 'Taxi or transport nearby', 'Angel Shot available', 'Women-friendly crowd', 'Security at door'];
@@ -814,6 +814,7 @@ async function loadSisterhood() {
   if (e.error) return fail(e.error);
   if (th.error) return fail(th.error);
   S.events = e.data || []; S.threads = th.data || [];
+  if (LIVE && !S.adminChecked) { const a = await sb.rpc('is_admin'); S.admin = a.data === true; S.adminChecked = true; }
   if (S.tab === 'sisterhood') render();
 }
 
@@ -924,7 +925,7 @@ function eventSheet(id) {
     ${e.place ? `<p><b>Where:</b> ${esc(e.place)}</p>` : ''}${e.description ? `<p>${esc(e.description)}</p>` : ''}
     <p class="small muted">Organised by ${esc(e.organizer || 'a sister')}</p>
     <div class="stack"><b>${eventCountLine(e)}</b>${going.length ? going.map((m) => `<div class="row">${avatar(m.name)}<span>${esc(m.name)}</span></div>`).join('') : '<p class="small muted">Nobody yet. Be the first.</p>'}</div>
-    ${act}${own ? `<button class="btn ghost block" data-act="event-cancel:${e.id}">Cancel this event</button>` : ''}
+    ${act}${own ? `<button class="btn ghost block" data-act="event-cancel:${e.id}">Cancel this event</button>` : `<button class="btn ghost sm" data-act="report:event:${e.id}">Report</button>${S.admin ? `<button class="btn ghost sm" data-act="mod-del:event:${e.id}">Remove (moderator)</button>` : ''}`}
     <p class="small muted">Meet in a public place first, and let your Sis group know where you are going.</p>`);
 }
 function newEventSheet(kind) {
@@ -944,8 +945,8 @@ function threadSheet(th, replies, toEnd) {
   const own = th.created_by === S.user.id;
   openSheet(`${sheetHead(esc(th.title))}
     <p class="small muted">${esc(th.author)} · ${ago(th.created_at)}</p>
-    ${th.body ? `<p>${esc(th.body)}</p>` : ''}${own ? `<button class="btn ghost sm" data-act="thread-del:${th.id}">Delete my thread</button>` : ''}
-    <div class="stack"><b>${replies.length} ${replies.length === 1 ? 'reply' : 'replies'}</b>${replies.map((r) => `<div class="card"><div class="row between"><b class="small">${esc(r.author)}</b><span class="small muted">${ago(r.created_at)}</span></div><p>${esc(r.body)}</p>${r.created_by === S.user.id ? `<button class="btn sm ghost" data-act="reply-del:${r.id}:${th.id}">Delete my reply</button>` : ''}</div>`).join('')}</div>
+    ${th.body ? `<p>${esc(th.body)}</p>` : ''}${own ? `<button class="btn ghost sm" data-act="thread-del:${th.id}">Delete my thread</button>` : `<button class="btn ghost sm" data-act="report:thread:${th.id}">Report</button>${S.admin ? `<button class="btn ghost sm" data-act="mod-del:thread:${th.id}">Remove (moderator)</button>` : ''}`}
+    <div class="stack"><b>${replies.length} ${replies.length === 1 ? 'reply' : 'replies'}</b>${replies.map((r) => `<div class="card"><div class="row between"><b class="small">${esc(r.author)}</b><span class="small muted">${ago(r.created_at)}</span></div><p>${esc(r.body)}</p>${r.created_by === S.user.id ? `<button class="btn sm ghost" data-act="reply-del:${r.id}:${th.id}">Delete my reply</button>` : `<button class="btn sm ghost" data-act="report:reply:${r.id}">Report</button>${S.admin ? `<button class="btn sm ghost" data-act="mod-del:reply:${r.id}">Remove (moderator)</button>` : ''}`}</div>`).join('')}</div>
     <div class="field"><label for="thReply">Your reply</label><input id="thReply" maxlength="500" placeholder="Be kind. Be helpful."></div>
     <button class="btn block" data-act="reply-send:${th.id}">Reply</button>
     <p class="small muted">Please don't share names, photos or details that identify other people.</p>`);
@@ -955,6 +956,13 @@ async function openThread(id, toEnd) {
   const th = S.threads.find((x) => x.id === id); if (!th) return;
   const r = await sb.from('thread_replies').select('*').eq('thread_id', id).order('created_at'); if (r.error) return fail(r.error);
   threadSheet(th, r.data || [], toEnd);
+}
+function reportSheet(kind, id) {
+  openSheet(`${sheetHead('Report')}
+    <p class="small muted">Tell us what is wrong. Only the sis. team sees your report, and the author is not told who reported.</p>
+    <div class="field"><label for="repReason">Reason</label><select id="repReason"><option value="inappropriate">Inappropriate</option><option value="threats">Threats or harassment</option><option value="personal">Shares personal information</option><option value="spam">Spam</option><option value="other">Something else</option></select></div>
+    <div class="field"><label for="repNote">Note (optional)</label><input id="repNote" maxlength="200"></div>
+    <button class="btn block" data-act="report-send:${kind}:${id}">Send report</button>`);
 }
 function newThreadSheet() {
   openSheet(`${sheetHead('Start a thread')}
@@ -1102,6 +1110,19 @@ document.addEventListener('click', async (e) => {
       }
       case 'seg': S.seg = arg; return render();
       case 'around-locate': { const p = await locateOnce(); if (!p) return toast('Could not get your location. Check Location settings.', 'alert'); const M = maps.around; if (M) { M.layer.clearLayers(); L.circleMarker([p.lat, p.lng], { radius: 8, color: '#fff', weight: 2, fillColor: '#7C4DFF', fillOpacity: 1 }).addTo(M.layer); M.map.setView([p.lat, p.lng], 15); } return; }
+      case 'report': { const [k, id] = arg.split(':'); return reportSheet(k, id); }
+      case 'report-send': {
+        const [k, id] = arg.split(':');
+        const { error } = await sb.from('reports').insert({ reporter: S.user.id, kind: k, target_id: id, reason: $('#repReason').value, note: $('#repNote').value.trim() || null });
+        if (error && error.code !== '23505') return fail(error);
+        closeSheet(); toast(error ? 'You already reported this. Thank you.' : 'Thank you. We will look at it.', 'check'); return;
+      }
+      case 'mod-del': {
+        if (!el.dataset.sure) { el.dataset.sure = '1'; el.textContent = 'Tap again to remove for everyone.'; return; }
+        const [k, id] = arg.split(':'); const table = { event: 'events', thread: 'threads', reply: 'thread_replies' }[k];
+        const { error } = await sb.from(table).delete().eq('id', id); if (error) return fail(error);
+        closeSheet(); await loadSisterhood(); toast('Removed'); return;
+      }
       case 'thread-open': return openThread(arg);
       case 'new-thread': return newThreadSheet();
       case 'thread-save': {
