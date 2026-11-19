@@ -51,7 +51,7 @@ let sb = null;
 const S = {
   user: null, name: '', phone: '', mode: 'day', auto: true, tab: 'home',
   groups: [], gid: null, group: null, members: [],
-  places: [], placeFilter: 'All', q: '', events: [],
+  places: [], placeFilter: 'All', q: '', events: [], threads: [], seg: 'events',
   watchId: null, lastSent: null, alerted: new Set(), wake: null, addMode: false, review: null
 };
 const GOOD_TAGS = ['Staff responsive', 'Well-lit street', 'Taxi or transport nearby', 'Angel Shot available', 'Women-friendly crowd', 'Security at door'];
@@ -140,7 +140,16 @@ function demoDb() {
       { id: 'e2', created_by: 'u-liis', organizer: 'Liis', title: 'Book club: first meeting', kind: 'meetup', starts_at: iso(4 * 1440), place: 'Café Lumi, Kalamaja', capacity: 8, description: 'One book a month, tea or wine.', created_at: iso(-200) },
       { id: 'e3', created_by: 'u-kati', organizer: 'Kati', title: 'Weekend in Riga', kind: 'trip', starts_at: iso(9 * 1440), place: 'Riga, bus from Tallinn', capacity: null, description: 'Christmas market and a spa day. Looking for company.', created_at: iso(-100) }
     ],
-    event_members: []
+    event_members: [],
+    threads: [
+      { id: 'th1', created_by: 'u-kati', author: 'Kati', title: 'Safe ways to get home after a late event?', body: 'What do you do when the last tram is gone? Taxi apps, walking with a friend, something else?', created_at: iso(-1500), last_reply_at: iso(-200) },
+      { id: 'th2', created_by: 'u-liis', author: 'Liis', title: 'New in Tallinn: where do you meet people?', body: null, created_at: iso(-3000), last_reply_at: iso(-2600) }
+    ],
+    thread_replies: [
+      { id: 'tr1', thread_id: 'th1', created_by: 'u-maria', author: 'Maria', body: 'I share my ride with my group and text when I am home.', created_at: iso(-900) },
+      { id: 'tr2', thread_id: 'th1', created_by: 'u-sofia', author: 'Sofia', body: 'Walk me home with a friend on the phone works for me.', created_at: iso(-200) },
+      { id: 'tr3', thread_id: 'th2', created_by: 'u-kati', author: 'Kati', body: 'The Sunday walk in Kadriorg is a good start.', created_at: iso(-2600) }
+    ]
   };
   ['p1', 'p2', 'p5', 'p7'].forEach((id) => { T.places.find((x) => x.id === id).badge = true; });
   [['e1', ['Kati', 'Maria', 'Sofia']], ['e2', ['Liis']], ['e3', ['Kati']]].forEach(([eid, names]) => names.forEach((n) => T.event_members.push({ event_id: eid, user_id: 'u-' + n.toLowerCase() + eid, name: n })));
@@ -151,6 +160,7 @@ function demoDb() {
     const r = { ...row };
     if (table === 'group_members' && /groups\(/.test(sel)) r.groups = T.groups.find((g) => g.id === row.group_id) || null;
     if (table === 'places' && /reviews/.test(sel)) r.reviews = T.reviews.filter((x) => x.place_id === row.id).map((x) => ({ ...x }));
+    if (table === 'threads' && /thread_replies/.test(sel)) r.thread_replies = T.thread_replies.filter((x) => x.thread_id === row.id).map((x) => ({ id: x.id }));
     if (table === 'events' && /event_members/.test(sel)) r.event_members = T.event_members.filter((x) => x.event_id === row.id).map((x) => ({ user_id: x.user_id, name: x.name }));
     return r;
   }
@@ -161,6 +171,7 @@ function demoDb() {
     if (st.op === 'insert') {
       out = [].concat(st.payload).map((p) => ({ id: newId(), created_at: new Date().toISOString(), user_id: 'me', ...p }));
       rows.push(...out);
+      if (st.table === 'thread_replies') out.forEach((r) => { const th = T.threads.find((x) => x.id === r.thread_id); if (th) th.last_reply_at = r.created_at; });
     } else if (st.op === 'update') {
       out = rows.filter(match); out.forEach((r) => Object.assign(r, st.payload));
     } else if (st.op === 'upsert') {
@@ -686,18 +697,29 @@ function upcomingEvents() { const cut = Date.now() - 3 * 3600e3; return S.events
 function eventSpotsLeft(e) { return e.capacity ? Math.max(0, e.capacity - (e.event_members || []).length) : null; }
 function eventCountLine(e) { const n = (e.event_members || []).length, left = eventSpotsLeft(e); return `${n} going${left !== null ? ` · ${left} ${left === 1 ? 'spot' : 'spots'} left` : ''}`; }
 function sisterhoodScreen() {
-  const list = upcomingEvents();
-  const body = list.length ? list.map((e) => {
-    const mine = (e.event_members || []).some((x) => x.user_id === S.user.id), left = eventSpotsLeft(e);
-    const join = mine ? `<button class="pill safe" data-act="event-leave:${e.id}">${ic('check')}I'm in</button>`
-      : left === 0 ? '<span class="pill">Full</span>' : `<button class="btn sm" data-act="event-join:${e.id}">I'm in</button>`;
-    return `<div class="card stack"><div class="row between"><span class="pill">${EVENT_KINDS[e.kind] || 'Event'}</span><span class="small muted">${esc(fmtWhen(e.starts_at))}</span></div>
-      <h3>${esc(e.title)}</h3>${e.place ? `<p class="small muted">${esc(e.place)}</p>` : ''}
-      <p class="small muted">${eventCountLine(e)}</p>
-      <div class="row between"><button class="btn sm ghost" data-act="event-open:${e.id}">Details</button>${join}</div></div>`;
-  }).join('') : `<div class="empty">${ic('users')}<b>No events yet</b><span class="small">Create the first one: a walk, a coffee or a trip.</span><button class="btn sm" data-act="new-event:meetup">${ic('plus')}Create an event</button></div>`;
+  const seg = S.seg === 'threads' ? 'threads' : 'events';
+  let body;
+  if (seg === 'threads') {
+    body = S.threads.length ? S.threads.map((th) => {
+      const n = (th.thread_replies || []).length;
+      return `<div class="card stack"><h3>${esc(th.title)}</h3>${th.body ? `<p class="small muted">${esc(th.body.length > 110 ? th.body.slice(0, 110) + '…' : th.body)}</p>` : ''}
+        <div class="row between"><span class="small muted">${esc(th.author)} · ${n} ${n === 1 ? 'reply' : 'replies'} · ${ago(th.last_reply_at)}</span><button class="btn sm ghost" data-act="thread-open:${th.id}">Open</button></div></div>`;
+    }).join('') : `<div class="empty">${ic('users')}<b>No threads yet</b><span class="small">Ask a question or share a tip. Be kind.</span><button class="btn sm" data-act="new-thread">${ic('plus')}Start a thread</button></div>`;
+  } else {
+    const list = upcomingEvents();
+    body = list.length ? list.map((e) => {
+      const mine = (e.event_members || []).some((x) => x.user_id === S.user.id), left = eventSpotsLeft(e);
+      const join = mine ? `<button class="pill safe" data-act="event-leave:${e.id}">${ic('check')}I'm in</button>`
+        : left === 0 ? '<span class="pill">Full</span>' : `<button class="btn sm" data-act="event-join:${e.id}">I'm in</button>`;
+      return `<div class="card stack"><div class="row between"><span class="pill">${EVENT_KINDS[e.kind] || 'Event'}</span><span class="small muted">${esc(fmtWhen(e.starts_at))}</span></div>
+        <h3>${esc(e.title)}</h3>${e.place ? `<p class="small muted">${esc(e.place)}</p>` : ''}
+        <p class="small muted">${eventCountLine(e)}</p>
+        <div class="row between"><button class="btn sm ghost" data-act="event-open:${e.id}">Details</button>${join}</div></div>`;
+    }).join('') : `<div class="empty">${ic('users')}<b>No events yet</b><span class="small">Create the first one: a walk, a coffee or a trip.</span><button class="btn sm" data-act="new-event:meetup">${ic('plus')}Create an event</button></div>`;
+  }
   return `<section class="screen">
-    <div class="row between"><div><h1>Community</h1><p class="muted" style="margin-top:4px">Meet other women in person. Choose a public place.</p></div><button class="btn sm" data-act="new-event:meetup" aria-label="Create an event">${ic('plus')}Event</button></div>
+    <div class="row between"><div><h1>Community</h1><p class="muted" style="margin-top:4px">Meet other women in person, or just talk.</p></div><button class="btn sm" data-act="${seg === 'threads' ? 'new-thread' : 'new-event:meetup'}" aria-label="${seg === 'threads' ? 'Start a thread' : 'Create an event'}">${ic('plus')}${seg === 'threads' ? 'Thread' : 'Event'}</button></div>
+    <div class="seg">${[['events', 'Events'], ['threads', 'Threads']].map(([k, l]) => `<button class="${seg === k ? 'on' : ''}" data-act="seg:${k}">${l}</button>`).join('')}</div>
     <div class="stack">${body}</div></section>`;
 }
 
@@ -785,9 +807,13 @@ async function loadPlaces() {
   if (S.tab === 'places') { $('#placeList').innerHTML = placeListHTML(); updatePlacesMap(); }
 }
 async function loadSisterhood() {
-  const r = await sb.from('events').select('*, event_members(user_id, name)').order('starts_at').limit(100);
-  if (r.error) return fail(r.error);
-  S.events = r.data || [];
+  const [e, th] = await Promise.all([
+    sb.from('events').select('*, event_members(user_id, name)').order('starts_at').limit(100),
+    sb.from('threads').select('*, thread_replies(id)').order('last_reply_at', { ascending: false }).limit(100)
+  ]);
+  if (e.error) return fail(e.error);
+  if (th.error) return fail(th.error);
+  S.events = e.data || []; S.threads = th.data || [];
   if (S.tab === 'sisterhood') render();
 }
 
@@ -913,6 +939,29 @@ function newEventSheet(kind) {
     <div class="field"><label for="eDesc">Details (optional)</label><input id="eDesc" maxlength="300"></div>
     <p class="small muted">Other women see your first name. Please choose a public place.</p>
     <button class="btn block" data-act="event-save">Create event</button>`);
+}
+function threadSheet(th, replies, toEnd) {
+  const own = th.created_by === S.user.id;
+  openSheet(`${sheetHead(esc(th.title))}
+    <p class="small muted">${esc(th.author)} · ${ago(th.created_at)}</p>
+    ${th.body ? `<p>${esc(th.body)}</p>` : ''}${own ? `<button class="btn ghost sm" data-act="thread-del:${th.id}">Delete my thread</button>` : ''}
+    <div class="stack"><b>${replies.length} ${replies.length === 1 ? 'reply' : 'replies'}</b>${replies.map((r) => `<div class="card"><div class="row between"><b class="small">${esc(r.author)}</b><span class="small muted">${ago(r.created_at)}</span></div><p>${esc(r.body)}</p>${r.created_by === S.user.id ? `<button class="btn sm ghost" data-act="reply-del:${r.id}:${th.id}">Delete my reply</button>` : ''}</div>`).join('')}</div>
+    <div class="field"><label for="thReply">Your reply</label><input id="thReply" maxlength="500" placeholder="Be kind. Be helpful."></div>
+    <button class="btn block" data-act="reply-send:${th.id}">Reply</button>
+    <p class="small muted">Please don't share names, photos or details that identify other people.</p>`);
+  if (toEnd) $('#sheet').scrollTop = $('#sheet').scrollHeight;
+}
+async function openThread(id, toEnd) {
+  const th = S.threads.find((x) => x.id === id); if (!th) return;
+  const r = await sb.from('thread_replies').select('*').eq('thread_id', id).order('created_at'); if (r.error) return fail(r.error);
+  threadSheet(th, r.data || [], toEnd);
+}
+function newThreadSheet() {
+  openSheet(`${sheetHead('Start a thread')}
+    <div class="field"><label for="thTitle">Title</label><input id="thTitle" maxlength="100" placeholder="e.g. Safe ways to get home late?"></div>
+    <div class="field"><label for="thBody">Details (optional)</label><input id="thBody" maxlength="1000"></div>
+    <p class="small muted">Other women see your first name. Please don't share names, photos or details that identify other people.</p>
+    <button class="btn block" data-act="thread-save">Post thread</button>`);
 }
 function profileSheet() {
   openSheet(`${sheetHead('Edit profile')}
@@ -1053,6 +1102,16 @@ document.addEventListener('click', async (e) => {
       }
       case 'seg': S.seg = arg; return render();
       case 'around-locate': { const p = await locateOnce(); if (!p) return toast('Could not get your location. Check Location settings.', 'alert'); const M = maps.around; if (M) { M.layer.clearLayers(); L.circleMarker([p.lat, p.lng], { radius: 8, color: '#fff', weight: 2, fillColor: '#7C4DFF', fillOpacity: 1 }).addTo(M.layer); M.map.setView([p.lat, p.lng], 15); } return; }
+      case 'thread-open': return openThread(arg);
+      case 'new-thread': return newThreadSheet();
+      case 'thread-save': {
+        const title = $('#thTitle').value.trim(); if (!title) return toast('Give the thread a title', 'alert');
+        const { error } = await sb.from('threads').insert({ created_by: S.user.id, author: S.name, title, body: $('#thBody').value.trim() || null });
+        if (error) return fail(error); closeSheet(); S.seg = 'threads'; await loadSisterhood(); toast('Thread posted', 'users'); return;
+      }
+      case 'reply-send': { const text = $('#thReply').value.trim(); if (!text) return toast('Write a reply first', 'alert'); const { error } = await sb.from('thread_replies').insert({ thread_id: arg, created_by: S.user.id, author: S.name, body: text }); if (error) return fail(error); await loadSisterhood(); return openThread(arg, true); }
+      case 'reply-del': { const [rid, tid] = arg.split(':'); const { error } = await sb.from('thread_replies').delete().eq('id', rid); if (error) return fail(error); await loadSisterhood(); return openThread(tid); }
+      case 'thread-del': { if (!el.dataset.sure) { el.dataset.sure = '1'; el.textContent = 'Tap again to delete this thread and its replies.'; return; } const { error } = await sb.from('threads').delete().eq('id', arg); if (error) return fail(error); closeSheet(); await loadSisterhood(); toast('Thread deleted'); return; }
       case 'event-open': return eventSheet(arg);
       case 'new-event': return newEventSheet(arg);
       case 'event-join': { const { error } = await sb.rpc('join_event', { p_event: arg, p_name: S.name }); if (error) return fail(/full/i.test(error.message || '') ? new Error('This event is full') : error); await loadSisterhood(); if ($('#sheet').classList.contains('on')) eventSheet(arg); toast("You're in", 'check'); return; }
