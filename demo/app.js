@@ -627,7 +627,7 @@ function homeDay() {
       <button data-act="trip"><span class="ic">${ic('globe')}</span><span><b>Plan a trip</b><span class="small">Find a travel buddy</span></span></button>
     </div>
     ${notifyPromptHTML()}
-    ${window.sisNearbyHome ? window.sisNearbyHome.card() : ''}
+    ${!LIVE && window.sisNearbyHome ? window.sisNearbyHome.card() : ''}
   </section>`;
 }
 function homeNight() {
@@ -639,7 +639,7 @@ function homeNight() {
     <div id="banners" class="stack">${bannersHTML()}</div>
     <div id="myCard">${myCardHTML()}</div>
     ${notifyPromptHTML()}
-    ${window.sisNearbyHome ? window.sisNearbyHome.card() : ''}
+    ${!LIVE && window.sisNearbyHome ? window.sisNearbyHome.card() : ''}
     <div class="big2">
       <button class="btn safe" data-act="home">${ic('home')}I'm home</button>
       <button class="btn" data-act="walk">${ic('nav')}Walk me home</button>
@@ -743,7 +743,7 @@ function render() {
   m.innerHTML = S.tab === 'home' ? (S.mode === 'night' ? homeNight() : homeDay()) : S.tab === 'places' ? placesScreen() : S.tab === 'sisterhood' ? sisterhoodScreen() : meScreen();
   renderTabs();
   if (S.tab === 'home' && $('#groupMap')) { mountMap('group', $('#groupMap')); updateGroupMap(); }
-  if (S.tab === 'home' && window.sisNearbyHome) window.sisNearbyHome.mount();
+  if (S.tab === 'home' && !LIVE && window.sisNearbyHome) window.sisNearbyHome.mount();
   if (S.tab === 'places') {
     mountMap('places', $('#placesMap')); updatePlacesMap();
     $('#q').oninput = (e) => { S.q = e.target.value; $('#placeList').innerHTML = placeListHTML(); updatePlacesMap(); };
