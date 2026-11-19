@@ -51,7 +51,7 @@ let sb = null;
 const S = {
   user: null, name: '', phone: '', mode: 'day', auto: true, tab: 'home',
   groups: [], gid: null, group: null, members: [],
-  places: [], placeFilter: 'All', q: '', circles: [], trips: [], seg: 'circles',
+  places: [], placeFilter: 'All', q: '', events: [],
   watchId: null, lastSent: null, alerted: new Set(), wake: null, addMode: false, review: null
 };
 const GOOD_TAGS = ['Staff responsive', 'Well-lit street', 'Taxi or transport nearby', 'Angel Shot available', 'Women-friendly crowd', 'Security at door'];
@@ -135,26 +135,15 @@ function demoDb() {
       review('p7', 'Maria', 'safe', ['Security at door', 'Staff responsive'], [], 'Night reception is very helpful.', 2200),
       review('p8', 'Kristi', 'mixed', ['Taxi or transport nearby'], ['Poorly lit street'], 'Wait inside the café across the street.', 400)
     ],
-    circles: [
-      { id: 'c1', emoji: '🌿', name: 'New in Tallinn', description: "Moved here recently? Let's explore the city together.", next_meetup: 'Thu 18:30 · Old Town', created_at: iso(-90000) },
-      { id: 'c2', emoji: '🏃‍♀️', name: 'Morning Runners', description: 'Easy 5 km along the seaside, all paces welcome.', next_meetup: 'Sat 09:00 · Kadriorg Park', created_at: iso(-80000) },
-      { id: 'c3', emoji: '📚', name: 'Book Club', description: 'One book a month, tea or wine.', next_meetup: 'Wed 19:00 · Café Lumi', created_at: iso(-70000) },
-      { id: 'c4', emoji: '💻', name: 'Women in Tech', description: 'Meetups, mentoring and job tips.', next_meetup: 'Tue 18:00 · Ülemiste City', created_at: iso(-60000) },
-      { id: 'c5', emoji: '🎨', name: 'Sunday Sketching', description: 'Bring a pencil, we bring the coffee.', next_meetup: 'Sun 12:00 · Telliskivi', created_at: iso(-50000) }
+    events: [
+      { id: 'e1', created_by: 'u-kati', organizer: 'Kati', title: 'Sunday walk in Kadriorg', kind: 'walk', starts_at: iso(2 * 1440), place: 'Kadriorg Park, main entrance', capacity: 10, description: 'Easy 5 km, all paces welcome. Coffee afterwards.', created_at: iso(-300) },
+      { id: 'e2', created_by: 'u-liis', organizer: 'Liis', title: 'Book club: first meeting', kind: 'meetup', starts_at: iso(4 * 1440), place: 'Café Lumi, Kalamaja', capacity: 8, description: 'One book a month, tea or wine.', created_at: iso(-200) },
+      { id: 'e3', created_by: 'u-kati', organizer: 'Kati', title: 'Weekend in Riga', kind: 'trip', starts_at: iso(9 * 1440), place: 'Riga, bus from Tallinn', capacity: null, description: 'Christmas market and a spa day. Looking for company.', created_at: iso(-100) }
     ],
-    circle_members: [],
-    trips: [
-      { id: 't1', user_id: 'u-kati', author: 'Kati', destination: 'Lisbon', dates: '12–16 Nov', note: 'Looking for someone to share dinners and sunset walks.', created_at: iso(-120) },
-      { id: 't2', user_id: 'u-maria', author: 'Maria', destination: 'Riga', dates: 'Weekend, 22–23 Nov', note: 'Christmas market and a spa day?', created_at: iso(-600) },
-      { id: 't3', user_id: 'u-sofia', author: 'Sofia', destination: 'Helsinki', dates: 'Day trip, 30 Oct', note: 'Morning ferry, design museums, back by night.', created_at: iso(-1500) },
-      { id: 't4', user_id: 'u-liis', author: 'Liis', destination: 'Barcelona', dates: '5–9 Dec', note: 'First solo trip, would love a buddy for evenings.', created_at: iso(-3000) }
-    ]
+    event_members: []
   };
   ['p1', 'p2', 'p5', 'p7'].forEach((id) => { T.places.find((x) => x.id === id).badge = true; });
-  [['c1', 23, true], ['c2', 14], ['c3', 9, true], ['c4', 31], ['c5', 7]].forEach(([cid, n, mine]) => {
-    for (let i = 0; i < n; i++) T.circle_members.push({ circle_id: cid, user_id: 'u-' + cid + i });
-    if (mine) T.circle_members.push({ circle_id: cid, user_id: 'me' });
-  });
+  [['e1', ['Kati', 'Maria', 'Sofia']], ['e2', ['Liis']], ['e3', ['Kati']]].forEach(([eid, names]) => names.forEach((n) => T.event_members.push({ event_id: eid, user_id: 'u-' + n.toLowerCase() + eid, name: n })));
   let seq = 0;
   const newId = () => 'x' + (++seq) + Math.random().toString(36).slice(2, 6);
   const code = () => Math.random().toString(16).slice(2, 8).toUpperCase();
@@ -162,7 +151,7 @@ function demoDb() {
     const r = { ...row };
     if (table === 'group_members' && /groups\(/.test(sel)) r.groups = T.groups.find((g) => g.id === row.group_id) || null;
     if (table === 'places' && /reviews/.test(sel)) r.reviews = T.reviews.filter((x) => x.place_id === row.id).map((x) => ({ ...x }));
-    if (table === 'circles' && /circle_members/.test(sel)) r.circle_members = T.circle_members.filter((x) => x.circle_id === row.id).map((x) => ({ user_id: x.user_id }));
+    if (table === 'events' && /event_members/.test(sel)) r.event_members = T.event_members.filter((x) => x.event_id === row.id).map((x) => ({ user_id: x.user_id, name: x.name }));
     return r;
   }
   function run(st) {
@@ -234,6 +223,14 @@ function demoDb() {
         if (!g) return { data: null, error: { message: 'code not found' } };
         if (!T.group_members.some((m) => m.group_id === g.id && m.user_id === 'me')) T.group_members.push(member(g.id, 'me', a.p_member_name, {}));
         return { data: { ...g }, error: null };
+      }
+      if (name === 'join_event') {
+        const ev = T.events.find((x) => x.id === a.p_event);
+        if (!ev) return { data: null, error: { message: 'event not found' } };
+        const there = T.event_members.some((m) => m.event_id === ev.id && m.user_id === 'me');
+        if (!there && ev.capacity && T.event_members.filter((m) => m.event_id === ev.id).length >= ev.capacity) return { data: null, error: { message: 'event is full' } };
+        if (!there) T.event_members.push({ event_id: ev.id, user_id: 'me', name: a.p_name });
+        return { data: null, error: null };
       }
       return { data: null, error: { message: 'Unknown action' } };
     },
@@ -680,27 +677,26 @@ function placesScreen() {
   </section>`;
 }
 
+function fmtWhen(d) { return new Date(d).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); }
+const EVENT_KINDS = { meetup: 'Meetup', walk: 'Walk', trip: 'Trip' };
+function upcomingEvents() { const cut = Date.now() - 3 * 3600e3; return S.events.filter((e) => new Date(e.starts_at).getTime() >= cut).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)); }
+function eventSpotsLeft(e) { return e.capacity ? Math.max(0, e.capacity - (e.event_members || []).length) : null; }
+function eventCountLine(e) { const n = (e.event_members || []).length, left = eventSpotsLeft(e); return `${n} going${left !== null ? ` · ${left} ${left === 1 ? 'spot' : 'spots'} left` : ''}`; }
 function sisterhoodScreen() {
-  let body = '';
-  if (S.seg === 'circles') {
-    body = S.circles.length ? S.circles.map((c) => {
-      const n = (c.circle_members || []).length, mine = (c.circle_members || []).some((x) => x.user_id === S.user.id);
-      return `<div class="card circle-card"><span class="circle-ic">${esc(c.emoji || '💜')}</span><span class="grow"><h3>${esc(c.name)}</h3>
-        ${c.description ? `<p class="small muted">${esc(c.description)}</p>` : ''}${c.next_meetup ? `<p class="small" style="margin-top:6px"><b>Next:</b> ${esc(c.next_meetup)}</p>` : ''}
-        <p class="small muted">${n} ${n === 1 ? 'member' : 'members'}</p></span>
-        ${mine ? `<button class="pill safe" data-act="leave-circle:${c.id}">${ic('check')}Joined</button>` : `<button class="btn sm" data-act="join-circle:${c.id}">Join</button>`}</div>`;
-    }).join('') : '<p class="muted">No circles yet.</p>';
-    body += `<button class="btn ghost block" data-act="new-circle">${ic('plus')}Start your own circle</button>`;
-  } else {
-    body = (S.trips.length ? S.trips.map((t) => `<div class="card stack"><div class="row">${avatar(t.author)}<span class="grow"><b>${esc(t.author)}</b> → ${esc(t.destination)}<br><span class="small muted">${esc(t.dates || '')}</span></span>
-      ${t.user_id === S.user.id ? `<button class="btn sm ghost" data-act="del-trip:${t.id}" aria-label="Delete trip">${ic('x')}</button>` : ''}</div>${t.note ? `<p class="small">${esc(t.note)}</p>` : ''}</div>`).join('')
-      : `<div class="empty">${ic('globe')}<b>No trips yet</b><span class="small">Post where you're going and find a travel buddy.</span></div>`)
-      + `<button class="btn block" data-act="post-trip">${ic('plus')}Post my trip</button>`;
-  }
+  const list = upcomingEvents();
+  const body = list.length ? list.map((e) => {
+    const mine = (e.event_members || []).some((x) => x.user_id === S.user.id), left = eventSpotsLeft(e);
+    const join = mine ? `<button class="pill safe" data-act="event-leave:${e.id}">${ic('check')}I'm in</button>`
+      : left === 0 ? '<span class="pill">Full</span>' : `<button class="btn sm" data-act="event-join:${e.id}">I'm in</button>`;
+    return `<div class="card stack"><div class="row between"><span class="pill">${EVENT_KINDS[e.kind] || 'Event'}</span><span class="small muted">${esc(fmtWhen(e.starts_at))}</span></div>
+      <h3>${esc(e.title)}</h3>${e.place ? `<p class="small muted">${esc(e.place)}</p>` : ''}
+      <p class="small muted">${eventCountLine(e)}</p>
+      <div class="row between"><button class="btn sm ghost" data-act="event-open:${e.id}">Details</button>${join}</div></div>`;
+  }).join('') : `<div class="empty">${ic('users')}<b>No events yet</b><span class="small">Create the first one: a walk, a coffee or a trip.</span></div>`;
   return `<section class="screen">
-    <div><h1>Sisterhood</h1><p class="muted" style="margin-top:4px">Your women, your city. Meet in person.</p></div>
-    <div class="seg">${[['circles', 'Circles'], ['trips', 'Travel']].map(([k, l]) => `<button class="${S.seg === k ? 'on' : ''}" data-act="seg:${k}">${l}</button>`).join('')}</div>
-    <div class="stack">${body}</div></section>`;
+    <div><h1>Events</h1><p class="muted" style="margin-top:4px">Meet other women in person. Always meet in a public place first.</p></div>
+    <div class="stack">${body}</div>
+    <button class="btn block" data-act="new-event:meetup">${ic('plus')}Create an event</button></section>`;
 }
 
 const SHARE_RULES = [
@@ -756,7 +752,7 @@ function renderTabs() {
     const tab = (k, i, l) => `<button data-tab="${k}" data-act="tab:${k}">${ic(i)}${l}</button>`;
     t.innerHTML = tab('home', 'home', 'Home') + tab('places', 'pin', 'Places') +
       '<button class="tab-sos" id="sos" aria-label="Hold for 2 seconds to send SOS"><span class="sos-core"><span class="fill" id="sosFill"></span><b>SOS</b></span></button>' +
-      tab('sisterhood', 'users', 'Sisterhood') + tab('me', 'user', 'Me');
+      tab('sisterhood', 'users', 'Events') + tab('me', 'user', 'Me');
     bindSOS();
   }
   t.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === S.tab));
@@ -786,13 +782,9 @@ async function loadPlaces() {
   if (S.tab === 'places') { $('#placeList').innerHTML = placeListHTML(); updatePlacesMap(); }
 }
 async function loadSisterhood() {
-  const [c, t] = await Promise.all([
-    sb.from('circles').select('*, circle_members(user_id)').order('created_at'),
-    sb.from('trips').select('*').order('created_at', { ascending: false }).limit(100)
-  ]);
-  if (c.error) return fail(c.error);
-  if (t.error) return fail(t.error);
-  S.circles = c.data || []; S.trips = t.data || [];
+  const r = await sb.from('events').select('*, event_members(user_id, name)').order('starts_at').limit(100);
+  if (r.error) return fail(r.error);
+  S.events = r.data || [];
   if (S.tab === 'sisterhood') render();
 }
 
@@ -893,21 +885,31 @@ function addPlaceSheet(lat, lng) {
     <button class="btn block" data-act="place-save">Add place</button>`);
   if (d.kind) $('#pKind').value = d.kind;
 }
-function newCircleSheet() {
-  openSheet(`${sheetHead('Start a circle')}
-    <div class="field"><span class="lab">Icon</span><div class="pick" id="cEmoji">${['💜', '📚', '🏃‍♀️', '🧘‍♀️', '🎨', '🍷', '🌿', '💻', '🍼', '✈️'].map((e, i) => `<button class="${i === 0 ? 'on' : ''}" data-act="pick-one" data-v="${e}" style="font-size:18px">${e}</button>`).join('')}</div></div>
-    <div class="field"><label for="cName">Name</label><input id="cName" maxlength="60" placeholder="e.g. Sunday Sketching"></div>
-    <div class="field"><label for="cDesc">What is it about?</label><input id="cDesc" maxlength="200"></div>
-    <div class="field"><label for="cNext">Next meetup (optional)</label><input id="cNext" maxlength="120" placeholder="e.g. Sun 12:00 · Kadriorg Park"></div>
-    <button class="btn block" data-act="circle-save">Create circle</button>`);
+function eventSheet(id) {
+  const e = S.events.find((x) => x.id === id); if (!e) return;
+  const going = e.event_members || [], mine = going.some((x) => x.user_id === S.user.id), left = eventSpotsLeft(e), own = e.created_by === S.user.id;
+  const act = mine ? `<button class="btn ghost block" data-act="event-leave:${e.id}">I can't make it</button>`
+    : left === 0 ? '<p class="small muted">This event is full.</p>' : `<button class="btn block" data-act="event-join:${e.id}">I'm in</button>`;
+  openSheet(`${sheetHead(esc(e.title))}
+    <p class="small muted">${EVENT_KINDS[e.kind] || 'Event'} · ${esc(fmtWhen(e.starts_at))}</p>
+    ${e.place ? `<p><b>Where:</b> ${esc(e.place)}</p>` : ''}${e.description ? `<p>${esc(e.description)}</p>` : ''}
+    <p class="small muted">Organised by ${esc(e.organizer || 'a sister')}</p>
+    <div class="stack"><b>${eventCountLine(e)}</b>${going.length ? going.map((m) => `<div class="row">${avatar(m.name)}<span>${esc(m.name)}</span></div>`).join('') : '<p class="small muted">Nobody yet. Be the first.</p>'}</div>
+    ${act}${own ? `<button class="btn ghost block" data-act="event-cancel:${e.id}">Cancel this event</button>` : ''}
+    <p class="small muted">Meet in a public place first, and let your Sis group know where you are going.</p>`);
 }
-function postTripSheet() {
-  openSheet(`${sheetHead('Post my trip')}
-    <div class="field"><label for="tTo">Where to?</label><input id="tTo" maxlength="80" placeholder="e.g. Lisbon"></div>
-    <div class="field"><label for="tWhen">When?</label><input id="tWhen" maxlength="60" placeholder="e.g. 12–16 May"></div>
-    <div class="field"><label for="tNote">What are you looking for?</label><input id="tNote" maxlength="300" placeholder="Someone to share dinners and walks"></div>
-    <p class="small muted">Other sisters see your first name. Meet in public first.</p>
-    <button class="btn block" data-act="trip-save">Post trip</button>`);
+function newEventSheet(kind) {
+  const d = new Date(Date.now() + 24 * 3600e3); d.setHours(18, 0, 0, 0);
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  openSheet(`${sheetHead('Create an event')}
+    <div class="field"><span class="lab">Type</span><div class="pick" id="eKind">${Object.entries(EVENT_KINDS).map(([k, l]) => `<button class="${k === (kind || 'meetup') ? 'on' : ''}" data-act="pick-one" data-v="${k}">${l}</button>`).join('')}</div></div>
+    <div class="field"><label for="eTitle">Title</label><input id="eTitle" maxlength="80" placeholder="e.g. Sunday walk in Kadriorg"></div>
+    <div class="field"><label for="eWhen">When</label><input id="eWhen" type="datetime-local" value="${local}"></div>
+    <div class="field"><label for="ePlace">Where</label><input id="ePlace" maxlength="120" placeholder="A public place, e.g. Kadriorg Park entrance"></div>
+    <div class="field"><label for="eCap">Spots (optional)</label><input id="eCap" type="number" min="2" max="100" inputmode="numeric" placeholder="Leave empty for no limit"></div>
+    <div class="field"><label for="eDesc">Details (optional)</label><input id="eDesc" maxlength="300"></div>
+    <p class="small muted">Other women see your first name. Please choose a public place.</p>
+    <button class="btn block" data-act="event-save">Create event</button>`);
 }
 function profileSheet() {
   openSheet(`${sheetHead('Edit profile')}
@@ -1024,7 +1026,7 @@ document.addEventListener('click', async (e) => {
       case 'date-go': { const who = $('#dWho').value.trim(), where = $('#dWhere').value.trim(), [hh, mm] = ($('#dTime').value || '22:00').split(':').map(Number); const d = new Date(); d.setHours(hh, mm, 0, 0); if (d < new Date()) d.setDate(d.getDate() + 1); const live = $('#dLoc').checked; closeSheet(); await updateMe({ status: 'out', place: where || null, walk_to: `Date${who ? ' with ' + who : ''}`, walk_deadline: d.toISOString() }); if (live) startSharing(true); render(); toast(`Check-in set for ${fmtTime(d)}`, 'heart'); return; }
       case 'ride': if (needGroup()) return; return rideSheet();
       case 'ride-go': { const plate = $('#rPlate').value.trim().toUpperCase(), to = $('#rTo').value.trim() || 'Home', min = +(picked('#rMin') || 20); closeSheet(); await updateMe({ status: 'on_way', place: plate ? `Taxi ${plate}` : 'In a taxi', walk_to: to, walk_deadline: new Date(Date.now() + min * 60000).toISOString() }); if (shareRule('trips')) startSharing(true); render(); toast('Your group is following your ride', 'car'); return; }
-      case 'trip': S.seg = 'trips'; return go('sisterhood');
+      case 'trip': await go('sisterhood'); return newEventSheet('trip');
       case 'filter': S.placeFilter = arg; document.querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', c.dataset.act === 'filter:' + arg)); $('#placeList').innerHTML = placeListHTML(); updatePlacesMap(); return;
       case 'place': return placeSheet(arg);
       case 'add-place': return addPlaceSheet();
@@ -1047,22 +1049,19 @@ document.addEventListener('click', async (e) => {
         const id = S.review.id; await loadPlaces(); placeSheet(id); toast('Thank you. You just helped other women choose.', 'heart'); return;
       }
       case 'seg': S.seg = arg; return render();
-      case 'join-circle': { const { error } = await sb.from('circle_members').insert({ circle_id: arg, user_id: S.user.id }); if (error) return fail(error); await loadSisterhood(); toast('Welcome to the circle!', 'users'); return; }
-      case 'leave-circle': { const { error } = await sb.from('circle_members').delete().eq('circle_id', arg).eq('user_id', S.user.id); if (error) return fail(error); await loadSisterhood(); toast('You left the circle'); return; }
-      case 'new-circle': return newCircleSheet();
-      case 'circle-save': {
-        const name = $('#cName').value.trim(); if (!name) return toast('Give the circle a name', 'alert');
-        const { data, error } = await sb.from('circles').insert({ name, emoji: picked('#cEmoji') || '💜', description: $('#cDesc').value.trim() || null, next_meetup: $('#cNext').value.trim() || null }).select().single();
+      case 'event-open': return eventSheet(arg);
+      case 'new-event': return newEventSheet(arg);
+      case 'event-join': { const { error } = await sb.rpc('join_event', { p_event: arg, p_name: S.name }); if (error) return fail(/full/i.test(error.message || '') ? new Error('This event is full') : error); await loadSisterhood(); if ($('#sheet').classList.contains('on')) eventSheet(arg); toast("You're in", 'check'); return; }
+      case 'event-leave': { const { error } = await sb.from('event_members').delete().eq('event_id', arg).eq('user_id', S.user.id); if (error) return fail(error); await loadSisterhood(); if ($('#sheet').classList.contains('on')) eventSheet(arg); return; }
+      case 'event-cancel': { if (!el.dataset.sure) { el.dataset.sure = '1'; el.textContent = 'Tap again to cancel this event for everyone.'; return; } const { error } = await sb.from('events').delete().eq('id', arg); if (error) return fail(error); closeSheet(); await loadSisterhood(); toast('Event cancelled'); return; }
+      case 'event-save': {
+        const title = $('#eTitle').value.trim(); if (!title) return toast('Give the event a title', 'alert');
+        const when = new Date($('#eWhen').value); if (isNaN(when) || when.getTime() < Date.now()) return toast('Pick a time in the future', 'alert');
+        const cap = parseInt($('#eCap').value, 10) || null; if (cap !== null && (cap < 2 || cap > 100)) return toast('Spots: between 2 and 100', 'alert');
+        const { data, error } = await sb.from('events').insert({ created_by: S.user.id, organizer: S.name, title, kind: picked('#eKind') || 'meetup', starts_at: when.toISOString(), place: $('#ePlace').value.trim() || null, capacity: cap, description: $('#eDesc').value.trim() || null }).select().single();
         if (error) return fail(error);
-        await sb.from('circle_members').insert({ circle_id: data.id, user_id: S.user.id }); closeSheet(); await loadSisterhood(); toast('Circle created', 'users'); return;
+        await sb.rpc('join_event', { p_event: data.id, p_name: S.name }); closeSheet(); await loadSisterhood(); toast('Event created', 'users'); return;
       }
-      case 'post-trip': return postTripSheet();
-      case 'trip-save': {
-        const to = $('#tTo').value.trim(); if (!to) return toast('Where are you going?', 'alert');
-        const { error } = await sb.from('trips').insert({ author: S.name, destination: to, dates: $('#tWhen').value.trim() || null, note: $('#tNote').value.trim() || null });
-        if (error) return fail(error); closeSheet(); await loadSisterhood(); toast('Trip posted', 'globe'); return;
-      }
-      case 'del-trip': { const { error } = await sb.from('trips').delete().eq('id', arg); if (error) return fail(error); await loadSisterhood(); return; }
       case 'edit-profile': return profileSheet();
       case 'profile-save': {
         const name = $('#eName').value.trim(), phone = $('#ePhone').value.trim() || null; if (!name) return toast('Add your first name', 'alert');
