@@ -608,6 +608,9 @@ function notifyPromptHTML() {
   return `<button class="note info" data-act="notify" style="text-align:left">${ic('bell')}<span>Turn on alerts so you hear it when a sister needs you</span></button>`;
 }
 
+function aroundCardHTML() {
+  return `<div class="card stack"><div class="row between"><h3>Around you</h3><button class="btn sm ghost" data-act="around-locate">${ic('locate')}Show me</button></div><div class="map" id="aroundMap"></div></div>`;
+}
 function homeDay() {
   const ss = sunTime(new Date(), false);
   const h = new Date().getHours(), greet = h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
@@ -624,19 +627,19 @@ function homeDay() {
       <button data-act="trip"><span class="ic">${ic('globe')}</span><span><b>Plan a trip</b><span class="small">Find a travel buddy</span></span></button>
     </div>
     ${notifyPromptHTML()}
-    ${!LIVE && window.sisNearbyHome ? window.sisNearbyHome.card() : ''}
+    ${!LIVE && window.sisNearbyHome ? window.sisNearbyHome.card() : (LIVE && !S.group ? aroundCardHTML() : '')}
   </section>`;
 }
 function homeNight() {
   const me = myRow(), sharing = !!me?.sharing;
   return `<section class="screen">
     <div><p class="eyebrow">${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
-      <h1>Your sisters are near, ${esc(S.name)}</h1>
+      <h1>${LIVE ? "We've got you tonight" : 'Your sisters are near'}, ${esc(S.name)}</h1>
       <span class="sunset">${ic('moon')}Sunset ${fmtTime(sunTime(new Date(), false))} · sunrise ${fmtTime(sunTime(new Date(Date.now() + (new Date().getHours() >= 12 ? 864e5 : 0)), true))}</span></div>
     <div id="banners" class="stack">${bannersHTML()}</div>
     <div id="myCard">${myCardHTML()}</div>
     ${notifyPromptHTML()}
-    ${!LIVE && window.sisNearbyHome ? window.sisNearbyHome.card() : ''}
+    ${!LIVE && window.sisNearbyHome ? window.sisNearbyHome.card() : (LIVE && !S.group ? aroundCardHTML() : '')}
     <div class="big2">
       <button class="btn safe" data-act="home">${ic('home')}I'm home</button>
       <button class="btn" data-act="walk">${ic('nav')}Walk me home</button>
@@ -692,11 +695,10 @@ function sisterhoodScreen() {
       <h3>${esc(e.title)}</h3>${e.place ? `<p class="small muted">${esc(e.place)}</p>` : ''}
       <p class="small muted">${eventCountLine(e)}</p>
       <div class="row between"><button class="btn sm ghost" data-act="event-open:${e.id}">Details</button>${join}</div></div>`;
-  }).join('') : `<div class="empty">${ic('users')}<b>No events yet</b><span class="small">Create the first one: a walk, a coffee or a trip.</span></div>`;
+  }).join('') : `<div class="empty">${ic('users')}<b>No events yet</b><span class="small">Create the first one: a walk, a coffee or a trip.</span><button class="btn sm" data-act="new-event:meetup">${ic('plus')}Create an event</button></div>`;
   return `<section class="screen">
-    <div><h1>Events</h1><p class="muted" style="margin-top:4px">Meet other women in person. Always meet in a public place first.</p></div>
-    <div class="stack">${body}</div>
-    <button class="btn block" data-act="new-event:meetup">${ic('plus')}Create an event</button></section>`;
+    <div class="row between"><div><h1>Community</h1><p class="muted" style="margin-top:4px">Meet other women in person. Choose a public place.</p></div><button class="btn sm" data-act="new-event:meetup" aria-label="Create an event">${ic('plus')}Event</button></div>
+    <div class="stack">${body}</div></section>`;
 }
 
 const SHARE_RULES = [
@@ -740,6 +742,7 @@ function render() {
   renderTabs();
   if (S.tab === 'home' && $('#groupMap')) { mountMap('group', $('#groupMap')); updateGroupMap(); }
   if (S.tab === 'home' && !LIVE && window.sisNearbyHome) window.sisNearbyHome.mount();
+  if (S.tab === 'home' && LIVE && $('#aroundMap')) mountMap('around', $('#aroundMap'));
   if (S.tab === 'places') {
     mountMap('places', $('#placesMap')); updatePlacesMap();
     $('#q').oninput = (e) => { S.q = e.target.value; $('#placeList').innerHTML = placeListHTML(); updatePlacesMap(); };
@@ -752,7 +755,7 @@ function renderTabs() {
     const tab = (k, i, l) => `<button data-tab="${k}" data-act="tab:${k}">${ic(i)}${l}</button>`;
     t.innerHTML = tab('home', 'home', 'Home') + tab('places', 'pin', 'Places') +
       '<button class="tab-sos" id="sos" aria-label="Hold for 2 seconds to send SOS"><span class="sos-core"><span class="fill" id="sosFill"></span><b>SOS</b></span></button>' +
-      tab('sisterhood', 'users', 'Events') + tab('me', 'user', 'Me');
+      tab('sisterhood', 'users', 'Community') + tab('me', 'user', 'Me');
     bindSOS();
   }
   t.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === S.tab));
@@ -1049,6 +1052,7 @@ document.addEventListener('click', async (e) => {
         const id = S.review.id; await loadPlaces(); placeSheet(id); toast('Thank you. You just helped other women choose.', 'heart'); return;
       }
       case 'seg': S.seg = arg; return render();
+      case 'around-locate': { const p = await locateOnce(); if (!p) return toast('Could not get your location. Check Location settings.', 'alert'); const M = maps.around; if (M) { M.layer.clearLayers(); L.circleMarker([p.lat, p.lng], { radius: 8, color: '#fff', weight: 2, fillColor: '#7C4DFF', fillOpacity: 1 }).addTo(M.layer); M.map.setView([p.lat, p.lng], 15); } return; }
       case 'event-open': return eventSheet(arg);
       case 'new-event': return newEventSheet(arg);
       case 'event-join': { const { error } = await sb.rpc('join_event', { p_event: arg, p_name: S.name }); if (error) return fail(/full/i.test(error.message || '') ? new Error('This event is full') : error); await loadSisterhood(); if ($('#sheet').classList.contains('on')) eventSheet(arg); toast("You're in", 'check'); return; }
