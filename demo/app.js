@@ -288,7 +288,7 @@ function renderWelcome(user) {
   const head = `<div class="logo-big">${LOGO(120, 86)}</div>
     <div class="stack"><p class="eyebrow">Sis · beta</p><h1>Step out bravely, with people you trust</h1>
     <p class="muted">Check in on each other, pick places other women rate as safe, and find your circle. Day and night.</p></div>`;
-  const beta = `<div class="note info">${ic('shieldok')}<span>This is a test version. sis. is not an emergency service: if you are in danger, call 112.</span></div>`;
+  const beta = `<div class="note info">${ic('shieldok')}<span>This is a test version. sis. is not an emergency service: if you are in danger, call 112.</span></div><p class="small muted">By continuing you agree to our <a href="../privacy/" target="_blank" rel="noopener">privacy policy</a>.</p>`;
   if (!user) {
     $('#main').innerHTML = `<section class="screen" style="padding-top:12px">${head}
     <button class="btn block" data-act="google">Continue with Google</button>${beta}</section>`;
@@ -746,6 +746,11 @@ function meScreen() {
       <button class="item" data-act="toggle-auto"><span class="grow"><span class="t">Night mode at sunset</span><br><span class="s">Switches on by itself after dark</span></span><span class="toggle ${S.auto ? 'on' : ''}" role="switch" aria-checked="${S.auto}"></span></button>
       <button class="item" data-act="notify"><span class="grow"><span class="t">Alerts</span><br><span class="s">${notif === 'granted' ? 'On. You get a notification while Sis is open.' : notif === 'denied' ? 'Blocked in browser settings.' : notif === 'unsupported' ? 'Not supported in this browser. Add Sis to your home screen.' : 'Tap to turn on.'}</span></span>${notif === 'granted' ? `<span class="pill safe">${ic('check')}On</span>` : ''}</button>
     </div></div>
+    <div class="list">
+      <a class="item" href="../privacy/" target="_blank" rel="noopener"><span class="grow"><span class="t">Privacy policy</span><br><span class="s">What we keep and how to delete it</span></span></a>
+      <a class="item" href="https://tally.so/r/4a7DrO" target="_blank" rel="noopener"><span class="grow"><span class="t">Tell us what you think</span><br><span class="s">Short and optional, it helps us a lot</span></span></a>
+      <a class="item" href="mailto:sis.safetyapp@gmail.com"><span class="grow"><span class="t">Contact us</span><br><span class="s">sis.safetyapp@gmail.com</span></span></a>
+    </div>
     ${LIVE ? '<button class="btn ghost block" data-act="signout">Sign out on this device</button><button class="btn ghost block" data-act="delete-account">Delete my account and data</button>' : ''}
   </section>`;
 }
