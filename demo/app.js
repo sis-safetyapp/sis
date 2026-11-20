@@ -664,6 +664,8 @@ function updateHzMap() {
   M.layer.clearLayers();
   if (S.hzMe) L.circle([S.hzMe.lat, S.hzMe.lng], { radius: 300, color: '#7C4DFF', weight: 1.5, dashArray: '6 6', fillColor: '#7C4DFF', fillOpacity: 0.05, interactive: false }).addTo(M.layer);
   if (S.hzMe) L.circleMarker([S.hzMe.lat, S.hzMe.lng], { radius: 8, color: '#fff', weight: 2, fillColor: '#7C4DFF', fillOpacity: 1 }).addTo(M.layer);
+  const hm = getHome();
+  if (hm) L.marker([hm.lat, hm.lng], { icon: L.divIcon({ className: '', iconSize: [0, 0], html: `<div class="mk"><span class="pd hzpin" style="background:var(--accent)">${ic('home')}</span></div>` }), interactive: false }).addTo(M.layer);
   for (const h of hzLive()) {
     const k = HZ[h.kind] || HZ.other;
     const icon = L.divIcon({ className: '', iconSize: [0, 0], html: `<div class="mk"><span class="pd hzpin" style="background:${k.color}">${ic(k.icon)}</span></div>` });
@@ -674,7 +676,7 @@ function hzMount() {
   const M = mountMap('around', $('#aroundMap')); if (!M) return;
   M.map.setView(S.hzMe ? [S.hzMe.lat, S.hzMe.lng] : TALLINN, 15);
   if (!S.hzMe && !S.hzAsked) { S.hzAsked = true; hzLocate(); }
-  M.map.on('click', (e) => { if (S.hzPick && S.hzDraft) { S.hzPick = false; S.hzDraft.pt = { lat: e.latlng.lat, lng: e.latlng.lng }; hzSheet(); } });
+  M.map.on('click', (e) => { if (S.homePick) { S.homePick = false; ls.set('home', JSON.stringify({ lat: e.latlng.lat, lng: e.latlng.lng })); updateHzMap(); toast('Home saved on this phone only', 'home'); return; } if (S.hzPick && S.hzDraft) { S.hzPick = false; S.hzDraft.pt = { lat: e.latlng.lat, lng: e.latlng.lng }; hzSheet(); } });
   updateHzMap(); loadHazards();
 }
 function hzSheet() {
@@ -702,12 +704,15 @@ function hzInfoSheet(id) {
 function aroundCardHTML() {
   return `<div class="card hzcard"><div class="hzmap"><div class="map big" id="aroundMap"></div>
     <button class="hzloc" data-act="around-locate" aria-label="Show my location">${ic('locate')}</button>
-    <div class="hzbar">
+    <div class="hzbar${ls.get('hzcol') === '1' ? ' col' : ''}">
       <button class="main" data-act="walk">${ic('nav')}<span>Walk me home</span></button>
-      <button data-act="hz-new">${ic('plus')}<span>Report</span></button>
-      <button data-act="date">${ic('heart')}<span>Date</span></button>
-      <button data-act="ride">${ic('car')}<span>Ride</span></button>
-      <button data-act="fakecall">${ic('phone')}<span>Fake call</span></button>
+      <div class="hzmore">
+        <button data-act="hz-new">${ic('plus')}<span>Report</span></button>
+        <button data-act="date">${ic('heart')}<span>Date</span></button>
+        <button data-act="ride">${ic('car')}<span>Ride</span></button>
+        <button data-act="fakecall">${ic('phone')}<span>Fake call</span></button>
+      </div>
+      <button class="hzt" data-act="hz-fold" aria-label="Show or hide buttons"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     </div></div></div>`;
 }
 function homeScreen() {
@@ -805,6 +810,7 @@ function meScreen() {
     <div class="stack"><h2>Settings</h2><div class="list">
       <button class="item" data-act="toggle-auto"><span class="grow"><span class="t">Night mode at sunset</span><br><span class="s">Switches on by itself after dark</span></span><span class="toggle ${S.auto ? 'on' : ''}" role="switch" aria-checked="${S.auto}"></span></button>
       <div class="item"><span class="grow"><span class="t">Theme</span><br><span class="s">${S.auto ? 'Following sunset' : S.mode === 'night' ? 'Dark, set by you' : 'Light, set by you'}</span></span><span class="row"><button class="btn ghost sm" data-act="mode:day">Light</button><button class="btn ghost sm" data-act="mode:night">Dark</button></span></div>
+      <div class="item"><span class="grow"><span class="t">Home</span><br><span class="s">${getHome() ? 'Saved on this phone only' : 'Suggests your walking time. Stays on this phone.'}</span></span><span class="row"><button class="btn ghost sm" data-act="home-here">I'm here</button><button class="btn ghost sm" data-act="home-pick">On map</button>${getHome() ? '<button class="btn ghost sm" data-act="home-clear">Clear</button>' : ''}</span></div>
       <button class="item" data-act="notify"><span class="grow"><span class="t">Alerts</span><br><span class="s">${notif === 'granted' ? 'On. You get a notification while Sis is open.' : notif === 'denied' ? 'Blocked in browser settings.' : notif === 'unsupported' ? 'Not supported in this browser. Add Sis to your home screen.' : 'Tap to turn on.'}</span></span>${notif === 'granted' ? `<span class="pill safe">${ic('check')}On</span>` : ''}</button>
     </div></div>
     <div class="list">
@@ -913,11 +919,22 @@ function inviteSheet() {
     <input id="inviteLink" readonly value="${esc(link)}" style="padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);width:100%">
     <div class="row"><button class="btn" style="flex:1" data-act="share-link">${ic('link')}Share link</button><button class="btn ghost" style="flex:1" data-act="copy-link">Copy</button></div>`);
 }
+function getHome() { try { return JSON.parse(ls.get('home') || 'null'); } catch (e) { return null; } }
+function homeEta() {
+  const h = getHome(), me = S.hzMe; if (!h || !me) return null;
+  return Math.max(10, Math.min(120, Math.ceil(distM(me, h) * 1.3 / 80 / 5) * 5 + 5));
+}
 function walkSheet() {
+  const eta = homeEta(), opts = [10, 15, 20, 30, 45]; if (eta && !opts.includes(eta)) { opts.push(eta); opts.sort((x, y) => x - y); }
+  const def = eta || 15;
+  const hint = eta ? `<p class="small">About ${eta - 5} min to your home, plus 5 min to spare.</p>`
+    : getHome() ? '<p class="small muted">Tap the target button on the map first and I will suggest the time.</p>'
+    : `<button class="btn ghost sm" data-act="home-set">${ic('home')}Set your home to get a time suggestion</button>`;
   openSheet(`${sheetHead('Walk me home')}
     <p class="small muted">Your group sees your live location until you tap "I'm home". If you don't check in on time, Sis asks if you're OK, then alerts them.</p>
     <div class="field"><label for="wTo">Going to</label><input id="wTo" maxlength="80" value="Home"></div>
-    <div class="field"><span class="lab">How long will it take?</span><div class="pick" id="wMin">${[10, 15, 20, 30, 45].map((m) => `<button class="${m === 15 ? 'on' : ''}" data-act="pick-one" data-v="${m}">${m} min</button>`).join('')}</div></div>
+    ${hint}
+    <div class="field"><span class="lab">How long will it take?</span><div class="pick" id="wMin">${opts.map((m) => `<button class="${m === def ? 'on' : ''}" data-act="pick-one" data-v="${m}">${m} min</button>`).join('')}</div></div>
     <button class="btn block" data-act="walk-go">${ic('nav')}Start walking</button>`);
 }
 function arrivedSheet() {
@@ -1184,6 +1201,11 @@ document.addEventListener('click', async (e) => {
         const id = S.review.id; await loadPlaces(); placeSheet(id); toast('Thank you. You just helped other women choose.', 'heart'); return;
       }
       case 'seg': S.seg = arg; return render();
+      case 'hz-fold': { const bar = el.closest('.hzbar'); bar.classList.toggle('col'); ls.set('hzcol', bar.classList.contains('col') ? '1' : '0'); return; }
+      case 'home-set': closeSheet(); return go('me');
+      case 'home-here': { const p = await locateOnce(); if (!p) return toast('Could not get your location. Check Location settings.', 'alert'); ls.set('home', JSON.stringify({ lat: p.lat, lng: p.lng })); render(); toast('Home saved on this phone only', 'home'); return; }
+      case 'home-pick': S.homePick = true; await go('home'); toast('Tap the map where your home is', 'pin'); return;
+      case 'home-clear': ls.set('home', ''); render(); toast('Home removed'); return;
       case 'around-locate': { const p = await hzLocate(); if (!p) return toast('Could not get your location. Check Location settings.', 'alert'); return; }
       case 'hz-new': S.hzDraft = { kind: null, note: '', pt: S.hzMe ? { lat: S.hzMe.lat, lng: S.hzMe.lng } : null }; return hzSheet();
       case 'hz-kind': { S.hzDraft.kind = arg; document.querySelectorAll('.hzk').forEach((b) => b.classList.toggle('on', b.dataset.act === 'hz-kind:' + arg)); return; }

@@ -287,3 +287,10 @@ body.night .hzbar button.main{color:#1B1535}
 .hzloc{left:12px;bottom:auto;top:12px;width:40px;height:40px}
 .map.carto .leaflet-tile-pane{filter:saturate(.45) brightness(1.07) contrast(.86)}
 body.night .map.carto .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.8) contrast(.9) saturate(.45)}
+
+/* collapsible map buttons */
+.hzmore{display:flex;flex-direction:column;gap:8px}
+.hzbar.col .hzmore{display:none}
+.hzbar button.hzt{height:26px;width:62px;background:transparent;border-radius:13px}
+.hzbar button.hzt svg{width:22px;height:22px;transition:transform .2s}
+.hzbar.col button.hzt svg{transform:rotate(180deg)}
