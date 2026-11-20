@@ -149,7 +149,14 @@ function demoDb() {
       { id: 'tr1', thread_id: 'th1', created_by: 'u-maria', author: 'Maria', body: 'I share my ride with my group and text when I am home.', created_at: iso(-900) },
       { id: 'tr2', thread_id: 'th1', created_by: 'u-sofia', author: 'Sofia', body: 'Walk me home with a friend on the phone works for me.', created_at: iso(-200) },
       { id: 'tr3', thread_id: 'th2', created_by: 'u-kati', author: 'Kati', body: 'The Sunday walk in Kadriorg is a good start.', created_at: iso(-2600) }
-    ]
+    ],
+    hazards: [
+      { id: 'hz1', kind: 'lighting', note: 'Street lamps out behind the park', ...at(250, -120), created_at: iso(-60 * 24 * 3), expires_at: iso(60 * 24 * 27) },
+      { id: 'hz2', kind: 'group', note: 'Loud group outside the bar', ...at(-60, 140), created_at: iso(-40), expires_at: iso(140) },
+      { id: 'hz3', kind: 'empty', note: 'Very quiet after 22:00', ...at(320, 260), created_at: iso(-60 * 24 * 10), expires_at: iso(60 * 24 * 20) },
+      { id: 'hz4', kind: 'following', note: null, ...at(-300, -200), created_at: iso(-25), expires_at: iso(155) }
+    ],
+    hazard_votes: []
   };
   ['p1', 'p2', 'p5', 'p7'].forEach((id) => { T.places.find((x) => x.id === id).badge = true; });
   [['e1', ['Kati', 'Maria', 'Sofia']], ['e2', ['Liis']], ['e3', ['Kati']]].forEach(([eid, names]) => names.forEach((n) => T.event_members.push({ event_id: eid, user_id: 'u-' + n.toLowerCase() + eid, name: n })));
@@ -171,6 +178,7 @@ function demoDb() {
     if (st.op === 'insert') {
       out = [].concat(st.payload).map((p) => ({ id: newId(), created_at: new Date().toISOString(), user_id: 'me', ...p }));
       rows.push(...out);
+      if (st.table === 'hazards') out.forEach((r) => { r.expires_at = new Date(Date.now() + (['lighting', 'empty'].includes(r.kind) ? 30 * 864e5 : 3 * 36e5)).toISOString(); });
       if (st.table === 'thread_replies') out.forEach((r) => { const th = T.threads.find((x) => x.id === r.thread_id); if (th) th.last_reply_at = r.created_at; });
     } else if (st.op === 'update') {
       out = rows.filter(match); out.forEach((r) => Object.assign(r, st.payload));
@@ -189,6 +197,7 @@ function demoDb() {
       }
       out = rows.filter(match);
     }
+    if (st.table === 'hazard_votes' && st.op === 'upsert') out.forEach((v) => { if (T.hazard_votes.filter((x) => x.hazard_id === v.hazard_id && x.still === false).length >= 2) T.hazards = T.hazards.filter((h) => h.id !== v.hazard_id); });
     if (st.order) { const [k, asc] = st.order; out = [...out].sort((a, b) => (a[k] > b[k] ? 1 : a[k] < b[k] ? -1 : 0) * (asc ? 1 : -1)); }
     if (st.limit) out = out.slice(0, st.limit);
     out = out.map((r) => expand(st.table, r, st.sel || ''));
@@ -619,8 +628,79 @@ function notifyPromptHTML() {
   return `<button class="note info" data-act="notify" style="text-align:left">${ic('bell')}<span>Turn on alerts so you hear it when a sister needs you</span></button>`;
 }
 
+/* ---------------- hazard marks (Waze-style) ---------------- */
+const HZ = {
+  lighting: { label: 'Bad lighting', color: '#C98A12', icon: 'moon' },
+  group: { label: 'Drunk or aggressive group', color: '#CF3540', icon: 'users' },
+  following: { label: 'Following or harassment', color: '#CF3540', icon: 'alert' },
+  empty: { label: 'Empty street', color: '#6A3FD0', icon: 'pin' },
+  other: { label: 'Something else', color: '#8A84A0', icon: 'bell' }
+};
+const hzLive = () => (S.hz || []).filter((h) => new Date(h.expires_at).getTime() > Date.now());
+function hzLeft(h) {
+  const m = Math.max(1, Math.round((new Date(h.expires_at).getTime() - Date.now()) / 60000));
+  return m >= 2880 ? Math.round(m / 1440) + ' days' : m >= 90 ? Math.round(m / 60) + ' hours' : m + ' min';
+}
+async function loadHazards() {
+  const [h, v] = await Promise.all([
+    sb.from('hazards').select('id, kind, note, lat, lng, created_at, expires_at').limit(300),
+    sb.from('hazard_votes').select('hazard_id, still').eq('user_id', S.user.id)
+  ]);
+  if (h.error) return console.error(h.error);
+  S.hz = h.data || []; S.hzVotes = {};
+  (v.data || []).forEach((x) => { S.hzVotes[x.hazard_id] = x.still; });
+  if (LIVE && !S.adminChecked) { const a = await sb.rpc('is_admin'); S.admin = a.data === true; S.adminChecked = true; }
+  updateHzMap();
+}
+async function hzLocate(quiet) {
+  const p = await locateOnce(); if (!p) return null;
+  S.hzMe = p; const M = maps.around;
+  if (M && !quiet) M.map.setView([p.lat, p.lng], 15);
+  updateHzMap(); return p;
+}
+function updateHzMap() {
+  const M = maps.around; if (!M) return;
+  M.layer.clearLayers();
+  if (S.hzMe) L.circleMarker([S.hzMe.lat, S.hzMe.lng], { radius: 8, color: '#fff', weight: 2, fillColor: '#7C4DFF', fillOpacity: 1 }).addTo(M.layer);
+  for (const h of hzLive()) {
+    const k = HZ[h.kind] || HZ.other;
+    const icon = L.divIcon({ className: '', iconSize: [0, 0], html: `<div class="mk"><span class="pd hzpin" style="background:${k.color}">${ic(k.icon)}</span></div>` });
+    L.marker([h.lat, h.lng], { icon, title: k.label }).on('click', () => hzInfoSheet(h.id)).addTo(M.layer);
+  }
+}
+function hzMount() {
+  const M = mountMap('around', $('#aroundMap')); if (!M) return;
+  if (S.hzMe) M.map.setView([S.hzMe.lat, S.hzMe.lng], 15);
+  M.map.on('click', (e) => { if (S.hzPick && S.hzDraft) { S.hzPick = false; S.hzDraft.pt = { lat: e.latlng.lat, lng: e.latlng.lng }; hzSheet(); } });
+  updateHzMap(); loadHazards();
+}
+function hzSheet() {
+  const d = S.hzDraft || (S.hzDraft = { kind: null, note: '', pt: null });
+  openSheet(`${sheetHead('Report something')}
+    <p class="small muted">Tell other sisters what to watch out for. Marks fade on their own and show no names.</p>
+    <div class="hzkinds">${Object.entries(HZ).map(([k, v]) => `<button class="hzk${d.kind === k ? ' on' : ''}" data-act="hz-kind:${k}"><span class="hzdot" style="background:${v.color}"></span>${v.label}</button>`).join('')}</div>
+    <div class="field"><label for="hzNote">A few words (optional)</label><input id="hzNote" maxlength="80" placeholder="e.g. near the bus stop" value="${esc(d.note)}"></div>
+    <div class="field"><span class="lab">Where?</span><p class="small" id="hzWhere">${d.pt ? ic('check') + ' Spot set' : 'Not set yet'}</p>
+      <div class="row"><button class="btn ghost sm" data-act="hz-here">${ic('locate')}I'm here now</button><button class="btn ghost sm" data-act="hz-pick">${ic('pin')}Pick on map</button></div></div>
+    <p class="small muted">Please don't write names or describe individuals. In an emergency call 112 or your local number: sis. does not replace emergency services.</p>
+    <button class="btn block" data-act="hz-save">Add to the map</button>`);
+}
+function hzInfoSheet(id) {
+  const h = (S.hz || []).find((x) => x.id === id); if (!h) return;
+  const k = HZ[h.kind] || HZ.other, mine = (S.hzVotes || {})[id];
+  openSheet(`${sheetHead(esc(k.label))}
+    <p class="small muted">Reported ${ago(h.created_at)} · fades in ${hzLeft(h)}</p>
+    ${h.note ? `<p>${esc(h.note)}</p>` : ''}
+    <p><b>Is it still there?</b></p>
+    <div class="row"><button class="btn grow${mine === true ? '' : ' ghost'}" data-act="hz-vote:${id}:1">Still here</button><button class="btn grow${mine === false ? '' : ' ghost'}" data-act="hz-vote:${id}:0">Gone now</button></div>
+    <div class="row"><button class="btn ghost sm" data-act="report:hazard:${id}">Report</button>${S.admin ? `<button class="btn ghost sm" data-act="mod-del:hazard:${id}">Remove (moderator)</button>` : ''}</div>
+    <p class="small muted">In an emergency call 112 or your local number.</p>`);
+}
 function aroundCardHTML() {
-  return `<div class="card stack"><div class="row between"><h3>Around you</h3><button class="btn sm ghost" data-act="around-locate">${ic('locate')}Show me</button></div><div class="map" id="aroundMap"></div></div>`;
+  return `<div class="card hzcard"><div class="hzmap"><div class="map big" id="aroundMap"></div>
+    <button class="hzadd" data-act="hz-new">${ic('plus')}<span>Report</span></button>
+    <button class="hzloc" data-act="around-locate" aria-label="Show my location">${ic('locate')}</button></div>
+    <p class="small muted hzfoot">Marks from other sisters fade on their own. Tap one to say if it is still there.</p></div>`;
 }
 function homeDay() {
   const ss = sunTime(new Date(), false);
@@ -631,6 +711,7 @@ function homeDay() {
       <span class="sunset">${ic('moon')}Sunset ${fmtTime(ss)} · ${S.auto ? 'night mode switches on by itself' : 'auto switch paused'}</span></div>
     <div id="banners" class="stack">${bannersHTML()}</div>
     <div id="myCard">${myCardHTML()}</div>
+    ${aroundCardHTML()}
     <div class="qa">
       <button data-act="arrived"><span class="ic">${ic('pin')}</span><span><b>I've arrived</b><span class="small">Tell your group you got there</span></span></button>
       <button data-act="date"><span class="ic">${ic('heart')}</span><span><b>Date check-in</b><span class="small">Your group checks on you</span></span></button>
@@ -638,7 +719,7 @@ function homeDay() {
       <button data-act="trip"><span class="ic">${ic('globe')}</span><span><b>Plan a trip</b><span class="small">Find a travel buddy</span></span></button>
     </div>
     ${notifyPromptHTML()}
-    ${!LIVE && window.sisNearbyHome ? window.sisNearbyHome.card() : (LIVE && !S.group ? aroundCardHTML() : '')}
+    ${!LIVE && window.sisNearbyHome ? window.sisNearbyHome.card() : ''}
   </section>`;
 }
 function homeNight() {
@@ -649,8 +730,9 @@ function homeNight() {
       <span class="sunset">${ic('moon')}Sunset ${fmtTime(sunTime(new Date(), false))} · sunrise ${fmtTime(sunTime(new Date(Date.now() + (new Date().getHours() >= 12 ? 864e5 : 0)), true))}</span></div>
     <div id="banners" class="stack">${bannersHTML()}</div>
     <div id="myCard">${myCardHTML()}</div>
+    ${aroundCardHTML()}
     ${notifyPromptHTML()}
-    ${!LIVE && window.sisNearbyHome ? window.sisNearbyHome.card() : (LIVE && !S.group ? aroundCardHTML() : '')}
+    ${!LIVE && window.sisNearbyHome ? window.sisNearbyHome.card() : ''}
     <div class="big2">
       <button class="btn safe" data-act="home">${ic('home')}I'm home</button>
       <button class="btn" data-act="walk">${ic('nav')}Walk me home</button>
@@ -771,7 +853,7 @@ function render() {
   renderTabs();
   if (S.tab === 'home' && $('#groupMap')) { mountMap('group', $('#groupMap')); updateGroupMap(); }
   if (S.tab === 'home' && !LIVE && window.sisNearbyHome) window.sisNearbyHome.mount();
-  if (S.tab === 'home' && LIVE && $('#aroundMap')) mountMap('around', $('#aroundMap'));
+  if (S.tab === 'home' && $('#aroundMap')) hzMount();
   if (S.tab === 'places') {
     mountMap('places', $('#placesMap')); updatePlacesMap();
     $('#q').oninput = (e) => { S.q = e.target.value; $('#placeList').innerHTML = placeListHTML(); updatePlacesMap(); };
@@ -1125,7 +1207,26 @@ document.addEventListener('click', async (e) => {
         const id = S.review.id; await loadPlaces(); placeSheet(id); toast('Thank you. You just helped other women choose.', 'heart'); return;
       }
       case 'seg': S.seg = arg; return render();
-      case 'around-locate': { const p = await locateOnce(); if (!p) return toast('Could not get your location. Check Location settings.', 'alert'); const M = maps.around; if (M) { M.layer.clearLayers(); L.circleMarker([p.lat, p.lng], { radius: 8, color: '#fff', weight: 2, fillColor: '#7C4DFF', fillOpacity: 1 }).addTo(M.layer); M.map.setView([p.lat, p.lng], 15); } return; }
+      case 'around-locate': { const p = await hzLocate(); if (!p) return toast('Could not get your location. Check Location settings.', 'alert'); return; }
+      case 'hz-new': S.hzDraft = { kind: null, note: '', pt: S.hzMe ? { lat: S.hzMe.lat, lng: S.hzMe.lng } : null }; return hzSheet();
+      case 'hz-kind': { S.hzDraft.kind = arg; document.querySelectorAll('.hzk').forEach((b) => b.classList.toggle('on', b.dataset.act === 'hz-kind:' + arg)); return; }
+      case 'hz-here': { $('#hzWhere').textContent = 'Finding you…'; const p = await hzLocate(true); if (!p) { $('#hzWhere').textContent = 'Could not get your location. Pick on the map instead.'; return; } S.hzDraft.pt = { lat: p.lat, lng: p.lng }; $('#hzWhere').innerHTML = `${ic('check')} Your current spot`; return; }
+      case 'hz-pick': { S.hzDraft.note = $('#hzNote').value; closeSheet(); S.hzPick = true; toast('Tap the map where it is', 'pin'); return; }
+      case 'hz-save': {
+        const d = S.hzDraft || {}; d.note = ($('#hzNote') ? $('#hzNote').value : '').trim();
+        if (!d.kind) return toast('Choose what you saw', 'alert'); if (!d.pt) return toast('Set where it is', 'alert');
+        const { error } = await sb.from('hazards').insert({ kind: d.kind, note: d.note || null, lat: d.pt.lat, lng: d.pt.lng });
+        if (error) return fail(error);
+        S.hzDraft = null; closeSheet(); await loadHazards();
+        const M = maps.around; if (M) M.map.setView([d.pt.lat, d.pt.lng], 16);
+        toast('Added to the map. Thank you, sister.', 'users'); return;
+      }
+      case 'hz-vote': {
+        const [id, v] = arg.split(':');
+        const { error } = await sb.from('hazard_votes').upsert({ hazard_id: id, user_id: S.user.id, still: v === '1' }, { onConflict: 'hazard_id,user_id' });
+        if (error) return fail(error);
+        closeSheet(); await loadHazards(); toast(v === '1' ? 'Thanks, it stays on the map' : 'Thanks, it goes if others agree'); return;
+      }
       case 'report': { const [k, id] = arg.split(':'); return reportSheet(k, id); }
       case 'report-send': {
         const [k, id] = arg.split(':');
@@ -1135,7 +1236,7 @@ document.addEventListener('click', async (e) => {
       }
       case 'mod-del': {
         if (!el.dataset.sure) { el.dataset.sure = '1'; el.textContent = 'Tap again to remove for everyone.'; return; }
-        const [k, id] = arg.split(':'); const table = { event: 'events', thread: 'threads', reply: 'thread_replies' }[k];
+        const [k, id] = arg.split(':'); const table = { event: 'events', thread: 'threads', reply: 'thread_replies', hazard: 'hazards' }[k];
         const { error } = await sb.from(table).delete().eq('id', id); if (error) return fail(error);
         closeSheet(); await loadSisterhood(); toast('Removed'); return;
       }
