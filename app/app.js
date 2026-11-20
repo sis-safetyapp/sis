@@ -78,7 +78,7 @@ function autoMode() { const n = new Date(), ss = sunTime(n, false), sr = sunTime
 let toastT;
 function toast(msg, icon = 'check') { const t = $('#toast'); t.innerHTML = ic(icon) + `<span>${esc(msg)}</span>`; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 3000); }
 function openSheet(html) { if (window.sisStopNearbyDemo) window.sisStopNearbyDemo(); $('#sheet').innerHTML = '<div class="grab"></div>' + html; $('#sheet').classList.add('on'); $('#scrim').classList.add('on'); $('#sheet').scrollTop = 0; }
-function closeSheet() { if (window.sisStopNearbyDemo) window.sisStopNearbyDemo(); $('#sheet').classList.remove('on'); $('#scrim').classList.remove('on'); S.addMode = false; }
+function closeSheet() { clearInterval(S.chatT); if (window.sisStopNearbyDemo) window.sisStopNearbyDemo(); $('#sheet').classList.remove('on'); $('#scrim').classList.remove('on'); S.addMode = false; }
 const sheetHead = (title) => `<div class="row between"><h2>${title}</h2><button class="btn ghost sm" data-act="close" aria-label="Close">${ic('x')}</button></div>`;
 function fail(e) { console.error(e); toast(e?.message ? `Something went wrong: ${e.message}` : 'Something went wrong. Try again.', 'alert'); }
 
@@ -252,6 +252,8 @@ function demoDb() {
         if (!there) T.event_members.push({ event_id: ev.id, user_id: 'me', name: a.p_name });
         return { data: null, error: null };
       }
+      if (name === 'my_dms') return { data: [], error: null };
+      if (name === 'start_dm') return { data: null, error: { message: 'Private chats work in the live app' } };
       return { data: null, error: { message: 'Unknown action' } };
     },
     auth: {
@@ -761,16 +763,25 @@ const EVENT_KINDS = { meetup: 'Meetup', walk: 'Walk', trip: 'Trip' };
 function upcomingEvents() { const cut = Date.now() - 3 * 3600e3; return S.events.filter((e) => new Date(e.starts_at).getTime() >= cut).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)); }
 function eventSpotsLeft(e) { return e.capacity ? Math.max(0, e.capacity - (e.event_members || []).length) : null; }
 function eventCountLine(e) { const n = (e.event_members || []).length, left = eventSpotsLeft(e); return `${n} going${left !== null ? ` · ${left} ${left === 1 ? 'spot' : 'spots'} left` : ''}`; }
+const STAR = (on) => `<svg viewBox="0 0 24 24" aria-hidden="true" width="20" height="20"><path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
 function sisterhoodScreen() {
-  const seg = S.seg === 'threads' ? 'threads' : 'events';
+  const seg = ['threads', 'chats'].includes(S.seg) ? S.seg : 'events', pins = S.pins || new Set();
   let body;
   if (seg === 'threads') {
-    body = S.threads.length ? S.threads.map((th) => {
-      const n = (th.thread_replies || []).length;
+    const ths = [...S.threads].sort((x, y) => (pins.has(y.id) ? 1 : 0) - (pins.has(x.id) ? 1 : 0));
+    body = ths.length ? ths.map((th) => {
+      const n = (th.thread_replies || []).length, on = pins.has(th.id);
       return `<div class="card ev" data-act="thread-open:${th.id}" role="button" tabindex="0"><div>${avatar(th.author)}</div>
         <div class="grow stack"><h3>${esc(th.title)}</h3>${th.body ? `<p class="small muted">${esc(th.body.length > 100 ? th.body.slice(0, 100) + '…' : th.body)}</p>` : ''}
-        <p class="small muted">${esc(th.author)} · ${n ? `${n} ${n === 1 ? 'reply' : 'replies'}` : 'no replies yet'} · ${ago(th.last_reply_at)}</p></div></div>`;
-    }).join('') : `<div class="empty">${ic('users')}<b>It is quiet here</b><span class="small">Ask something, share a tip, say hi. Everyone here is kind.</span><button class="btn sm" data-act="new-thread">${ic('plus')}Start a conversation</button></div>`;
+        <p class="small muted">${esc(th.author)} · ${n ? `${n} ${n === 1 ? 'reply' : 'replies'}` : 'no replies yet'} · ${ago(th.last_reply_at)}</p></div>
+        <button class="star${on ? ' on' : ''}" data-act="pin:${th.id}" aria-label="${on ? 'Remove from favourites' : 'Add to favourites'}">${STAR(on)}</button></div>`;
+    }).join('') : `<div class="empty">${ic('users')}<b>It is quiet here</b><span class="small">Ask something, share a tip, say hi. Everyone here is kind.</span><button class="btn sm" data-act="new-thread">${ic('plus')}Start a topic</button></div>`;
+  } else if (seg === 'chats') {
+    const mine = S.events.filter((e) => (e.event_members || []).some((x) => x.user_id === S.user.id));
+    const dms = S.dms || [];
+    body = (dms.length || mine.length) ? (dms.length ? `<h3>Private chats</h3>${dms.map((d) => `<div class="card ev" data-act="dm-open:${d.id}:${d.other}:${esc(d.other_name || 'Sister')}" role="button" tabindex="0"><div>${avatar(d.other_name || 'S')}</div><div class="grow stack"><h3>${esc(d.other_name || 'Sister')}</h3><p class="small muted">${esc((d.last_body || 'Say hello').slice(0, 80))} · ${ago(d.last_at)}</p></div></div>`).join('')}` : '') +
+      (mine.length ? `<h3>Event chats</h3>${mine.map((e) => `<div class="card ev" data-act="event-chat:${e.id}" role="button" tabindex="0"><div class="datebox"><b>${new Date(e.starts_at).getDate()}</b><span>${new Date(e.starts_at).toLocaleDateString('en-GB', { month: 'short' })}</span></div><div class="grow stack"><h3>${esc(e.title)}</h3><p class="small muted">${eventCountLine(e)}</p></div></div>`).join('')}` : '')
+      : `<div class="empty">${ic('users')}<b>No chats yet</b><span class="small">Join an event to chat with the others going. To message one sister privately, tap Message next to her name.</span></div>`;
   } else {
     const list = upcomingEvents();
     body = list.length ? list.map((e) => {
@@ -782,11 +793,12 @@ function sisterhoodScreen() {
       return `<div class="card ev" data-act="event-open:${e.id}" role="button" tabindex="0"><div class="datebox"><b>${d.getDate()}</b><span>${d.toLocaleDateString('en-GB', { month: 'short' })}</span></div>
         <div class="grow stack"><h3>${esc(e.title)}</h3><p class="small muted">${time}${e.place ? ' · ' + esc(e.place) : ''}</p>
         <div class="row between"><span class="small muted">${eventCountLine(e)}</span>${join}</div></div></div>`;
-    }).join('') : `<div class="empty">${ic('users')}<b>No plans yet</b><span class="small">Planning a walk, a coffee or a trip? Invite the others.</span><button class="btn sm" data-act="new-event:meetup">${ic('plus')}Plan something</button></div>`;
+    }).join('') : `<div class="empty">${ic('users')}<b>No events yet</b><span class="small">Planning a walk, a coffee or a trip? Invite the others.</span><button class="btn sm" data-act="new-event:meetup">${ic('plus')}Add an event</button></div>`;
   }
+  const act = seg === 'threads' ? ['new-thread', 'Topic'] : seg === 'events' ? ['new-event:meetup', 'Event'] : null;
   return `<section class="screen">
-    <div class="row between"><div><h1>Community</h1><p class="muted" style="margin-top:4px">Meet other women in person, or just talk.</p></div><button class="btn sm" data-act="${seg === 'threads' ? 'new-thread' : 'new-event:meetup'}" aria-label="${seg === 'threads' ? 'Start a conversation' : 'Plan something'}">${ic('plus')}${seg === 'threads' ? 'Talk' : 'Plan'}</button></div>
-    <div class="seg">${[['events', 'Plans'], ['threads', 'Conversations']].map(([k, l]) => `<button class="${seg === k ? 'on' : ''}" data-act="seg:${k}">${l}</button>`).join('')}</div>
+    <div class="row between"><div><h1>Community</h1><p class="muted" style="margin-top:4px">Meet other women in person, or just talk.</p></div>${act ? `<button class="btn sm" data-act="${act[0]}" aria-label="${act[1]}">${ic('plus')}${act[1]}</button>` : ''}</div>
+    <div class="seg">${[['events', 'Events'], ['threads', 'Topics'], ['chats', 'Chats']].map(([k, l]) => `<button class="${seg === k ? 'on' : ''}" data-act="seg:${k}">${l}</button>`).join('')}</div>
     <div class="stack">${body}</div></section>`;
 }
 
@@ -886,6 +898,8 @@ async function loadSisterhood() {
   if (e.error) return fail(e.error);
   if (th.error) return fail(th.error);
   S.events = e.data || []; S.threads = th.data || [];
+  const pn = await sb.from('thread_pins').select('thread_id'); S.pins = new Set((pn.data || []).map((x) => x.thread_id));
+  const dm = await sb.rpc('my_dms'); S.dms = dm.error ? [] : (dm.data || []);
   if (LIVE && !S.adminChecked) { const a = await sb.rpc('is_admin'); S.admin = a.data === true; S.adminChecked = true; }
   if (S.tab === 'sisterhood') render();
 }
@@ -1007,14 +1021,15 @@ function eventSheet(id) {
     <p class="small muted">${EVENT_KINDS[e.kind] || 'Event'} · ${esc(fmtWhen(e.starts_at))}</p>
     ${e.place ? `<p><b>Where:</b> ${esc(e.place)}</p>` : ''}${e.description ? `<p>${esc(e.description)}</p>` : ''}
     <p class="small muted">Organised by ${esc(e.organizer || 'a sister')}</p>
-    <div class="stack"><b>${eventCountLine(e)}</b>${going.length ? going.map((m) => `<div class="row">${avatar(m.name)}<span>${esc(m.name)}</span></div>`).join('') : '<p class="small muted">Nobody yet. Be the first.</p>'}</div>
+    <div class="stack"><b>${eventCountLine(e)}</b>${going.length ? going.map((m) => `<div class="row">${avatar(m.name)}<span class="grow">${esc(m.name)}</span>${m.user_id !== S.user.id ? `<button class="tiny" data-act="dm-start:${m.user_id}:${esc(m.name)}">Message</button>` : ''}</div>`).join('') : '<p class="small muted">Nobody yet. Be the first.</p>'}</div>
+    ${mine ? `<button class="btn block" data-act="event-chat:${e.id}">${ic('users')}Open event chat</button>` : ''}
     ${act}${own ? `<button class="btn ghost block" data-act="event-cancel:${e.id}">Cancel this event</button>` : `<button class="btn ghost sm" data-act="report:event:${e.id}">Report</button>${S.admin ? `<button class="btn ghost sm" data-act="mod-del:event:${e.id}">Remove (moderator)</button>` : ''}`}
     <p class="small muted">Meet in a public place first, and let your Sis group know where you are going.</p>`);
 }
 function newEventSheet(kind) {
   const d = new Date(Date.now() + 24 * 3600e3); d.setHours(18, 0, 0, 0);
   const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-  openSheet(`${sheetHead('Plan something together')}
+  openSheet(`${sheetHead('Create an event')}
     <p class="muted">A walk, a coffee, a day trip. Others can join with one tap.</p>
     <div class="field"><label for="eTitle">What are we doing?</label><input id="eTitle" maxlength="80" placeholder="e.g. Sunday walk in Kadriorg"></div>
     <div class="field"><label for="eWhen">When</label><input id="eWhen" type="datetime-local" value="${local}"></div>
@@ -1026,25 +1041,64 @@ function newEventSheet(kind) {
     <p class="small muted">Others will see your first name. Please choose a public place.</p>
     <button class="btn block" data-act="event-save">Create plan</button>`);
 }
+function replyBarHTML() { return `<div class="replybar" id="replyBar"${S.reply ? '' : ' hidden'}>${S.reply ? `Replying to ${esc(S.reply.who)} <button data-act="reply-clear" aria-label="Cancel reply">✕</button>` : ''}</div>`; }
 function threadSheet(th, replies, toEnd) {
-  const own = th.created_by === S.user.id;
-  const tiny = (act, label) => `<button class="tiny" data-act="${act}">${label}</button>`;
+  const own = th.created_by === S.user.id, byId = Object.fromEntries(replies.map((r) => [r.id, r]));
+  const tiny = (act, label, who) => `<button class="tiny" data-act="${act}"${who ? ` data-who="${esc(who)}"` : ''}>${label}</button>`;
   const mod = (kind, id) => (S.admin ? tiny(`mod-del:${kind}:${id}`, 'Remove (moderator)') : '');
-  const bubble = (who, text, ts, mine, actions) => `<div class="bub${mine ? ' me' : ''}"><div class="who">${esc(who)} · ${ago(ts)}</div>${text ? `<p>${esc(text)}</p>` : ''}${actions}</div>`;
-  const first = bubble(th.author, th.body, th.created_at, own, own ? tiny(`thread-del:${th.id}`, 'Delete') : tiny(`report:thread:${th.id}`, 'Report') + mod('thread', th.id));
+  const bubble = (who, text, ts, mine, actions, quote) => `<div class="bub${mine ? ' me' : ''}"><div class="who">${esc(who)} · ${ago(ts)}</div>${quote || ''}${text ? `<p>${esc(text)}</p>` : ''}${actions}</div>`;
+  const first = bubble(th.author, th.body, th.created_at, own, own ? tiny(`thread-del:${th.id}`, 'Delete') : tiny(`report:thread:${th.id}`, 'Report') + tiny(`dm-start:${th.created_by}:${th.author}`, 'Message') + mod('thread', th.id));
   const list = replies.map((r) => bubble(r.author, r.body, r.created_at, r.created_by === S.user.id,
-    r.created_by === S.user.id ? tiny(`reply-del:${r.id}:${th.id}`, 'Delete') : tiny(`report:reply:${r.id}`, 'Report') + mod('reply', r.id))).join('');
+    tiny(`reply-to:${r.id}`, 'Reply', r.author) + (r.created_by === S.user.id ? tiny(`reply-del:${r.id}:${th.id}`, 'Delete') : tiny(`report:reply:${r.id}`, 'Report') + tiny(`dm-start:${r.created_by}:${r.author}`, 'Message') + mod('reply', r.id)),
+    r.reply_to && byId[r.reply_to] ? `<div class="quote">${esc(byId[r.reply_to].author)}: ${esc(byId[r.reply_to].body.slice(0, 80))}</div>` : '')).join('');
   openSheet(`${sheetHead(esc(th.title))}
     <div class="chat">${first}${list || '<p class="small muted" style="text-align:center">No replies yet. Be the first.</p>'}</div>
+    ${replyBarHTML()}
     <div class="composer"><input id="thReply" maxlength="500" placeholder="Write a reply…" aria-label="Your reply"><button class="btn" data-act="reply-send:${th.id}">Send</button></div>
     <p class="small muted">Please don't share names, photos or details that identify other people.</p>`);
   if (toEnd) $('#sheet').scrollTop = $('#sheet').scrollHeight;
 }
 async function openThread(id, toEnd) {
+  S.reply = null;
   const th = S.threads.find((x) => x.id === id); if (!th) return;
   const r = await sb.from('thread_replies').select('*').eq('thread_id', id).order('created_at'); if (r.error) return fail(r.error);
   threadSheet(th, r.data || [], toEnd);
 }
+async function fetchChat(c) {
+  const r = c.kind === 'dm' ? await sb.from('dm_messages').select('*').eq('dm_id', c.id).order('created_at').limit(300)
+    : await sb.from('event_messages').select('*').eq('event_id', c.id).order('created_at').limit(300);
+  if (r.error) { fail(r.error); return null; }
+  return r.data || [];
+}
+function renderChat(msgs, toEnd) {
+  const c = S.chat; c.n = msgs.length;
+  const byId = Object.fromEntries(msgs.map((m) => [m.id, m]));
+  const tiny = (act, label, who) => `<button class="tiny" data-act="${act}"${who ? ` data-who="${esc(who)}"` : ''}>${label}</button>`;
+  const list = msgs.map((m) => {
+    const mine = m.created_by === S.user.id, who = c.kind === 'dm' ? (mine ? 'You' : c.title) : (m.author || 'Sister');
+    const q = m.reply_to && byId[m.reply_to] ? `<div class="quote">${esc(c.kind === 'dm' ? (byId[m.reply_to].created_by === S.user.id ? 'You' : c.title) : (byId[m.reply_to].author || 'Sister'))}: ${esc(byId[m.reply_to].body.slice(0, 80))}</div>` : '';
+    let acts = tiny(`reply-to:${m.id}`, 'Reply', who);
+    if (mine) acts += tiny(`chat-del:${m.id}`, 'Delete');
+    else { acts += tiny(`report:${c.kind === 'dm' ? 'dm_msg' : 'event_msg'}:${m.id}`, 'Report'); if (c.kind === 'event') acts += tiny(`dm-start:${m.created_by}:${who}`, 'Message'); if (S.admin && c.kind === 'event') acts += tiny(`mod-del:event_msg:${m.id}`, 'Remove (moderator)'); }
+    return `<div class="bub${mine ? ' me' : ''}"><div class="who">${esc(who)} · ${ago(m.created_at)}</div>${q}<p>${esc(m.body)}</p>${acts}</div>`;
+  }).join('');
+  const draft = $('#chatMsg') ? $('#chatMsg').value : '';
+  openSheet(`${sheetHead(esc(c.title))}
+    ${c.sub ? `<p class="small muted">${esc(c.sub)}</p>` : ''}
+    ${c.kind === 'dm' ? `<div class="row"><button class="btn ghost sm" data-act="dm-block:${c.other}">Block</button></div>` : ''}
+    <div class="chat">${list || '<p class="small muted" style="text-align:center">No messages yet. Say hello.</p>'}</div>
+    ${replyBarHTML()}
+    <div class="composer"><input id="chatMsg" maxlength="1000" placeholder="Write a message…" aria-label="Your message"><button class="btn" data-act="chat-send">Send</button></div>
+    <p class="small muted">No links, @handles or phone numbers here. Stay safe and keep chatting in sis.</p>`);
+  if (draft) $('#chatMsg').value = draft;
+  if (toEnd) $('#sheet').scrollTop = $('#sheet').scrollHeight;
+  clearInterval(S.chatT);
+  S.chatT = setInterval(async () => {
+    if (!$('#chatMsg') || !S.chat) return clearInterval(S.chatT);
+    const m2 = await fetchChat(S.chat); if (m2 && m2.length !== S.chat.n) renderChat(m2, true);
+  }, 6000);
+}
+async function openChat(c) { S.reply = null; S.chat = c; const msgs = await fetchChat(c); if (msgs) renderChat(msgs, true); }
 function reportSheet(kind, id) {
   openSheet(`${sheetHead('Report')}
     <p class="small muted">Tell us what is wrong. Only the sis. team sees your report, and the author is not told who reported.</p>
@@ -1201,6 +1255,36 @@ document.addEventListener('click', async (e) => {
         const id = S.review.id; await loadPlaces(); placeSheet(id); toast('Thank you. You just helped other women choose.', 'heart'); return;
       }
       case 'seg': S.seg = arg; return render();
+      case 'pin': {
+        const on = (S.pins || new Set()).has(arg);
+        const r = on ? await sb.from('thread_pins').delete().eq('thread_id', arg).eq('user_id', S.user.id) : await sb.from('thread_pins').insert({ thread_id: arg, user_id: S.user.id });
+        if (r.error) return fail(r.error);
+        S.pins = S.pins || new Set(); if (on) S.pins.delete(arg); else S.pins.add(arg);
+        render(); toast(on ? 'Removed from favourites' : 'Pinned to the top', 'check'); return;
+      }
+      case 'reply-to': { S.reply = { id: arg, who: el.dataset.who || 'Sister' }; const bar = $('#replyBar'); if (bar) { bar.hidden = false; bar.innerHTML = `Replying to ${esc(S.reply.who)} <button data-act="reply-clear" aria-label="Cancel reply">✕</button>`; } const inp = $('#chatMsg') || $('#thReply'); if (inp) inp.focus(); return; }
+      case 'reply-clear': { S.reply = null; const bar = $('#replyBar'); if (bar) { bar.hidden = true; bar.innerHTML = ''; } return; }
+      case 'event-chat': { const e = S.events.find((x) => x.id === arg); if (!e) return; return openChat({ kind: 'event', id: arg, title: e.title, sub: eventCountLine(e) }); }
+      case 'dm-open': { const [id, other, ...nm] = arg.split(':'); return openChat({ kind: 'dm', id, other, title: nm.join(':') || 'Sister', sub: 'Private chat' }); }
+      case 'dm-start': {
+        const [uid, ...nm] = arg.split(':'); const { data, error } = await sb.rpc('start_dm', { p_other: uid });
+        if (error) return fail(error); return openChat({ kind: 'dm', id: data, other: uid, title: nm.join(':') || 'Sister', sub: 'Private chat' });
+      }
+      case 'dm-block': {
+        if (!el.dataset.sure) { el.dataset.sure = '1'; el.textContent = 'Tap again to block. She can no longer message you.'; return; }
+        const { error } = await sb.from('blocks').insert({ blocker: S.user.id, blocked: arg }); if (error && error.code !== '23505') return fail(error);
+        clearInterval(S.chatT); closeSheet(); await loadSisterhood(); toast('Blocked', 'lock'); return;
+      }
+      case 'chat-send': {
+        const c = S.chat, text = ($('#chatMsg').value || '').trim(); if (!c || !text) return toast('Write a message first', 'alert');
+        const row = c.kind === 'dm' ? { dm_id: c.id, body: text, reply_to: S.reply ? S.reply.id : null } : { event_id: c.id, author: S.name, body: text, reply_to: S.reply ? S.reply.id : null };
+        const { error } = await sb.from(c.kind === 'dm' ? 'dm_messages' : 'event_messages').insert(row); if (error) return fail(error);
+        S.reply = null; $('#chatMsg').value = ''; const msgs = await fetchChat(c); if (msgs) renderChat(msgs, true); return;
+      }
+      case 'chat-del': {
+        const c = S.chat; const { error } = await sb.from(c.kind === 'dm' ? 'dm_messages' : 'event_messages').delete().eq('id', arg); if (error) return fail(error);
+        const msgs = await fetchChat(c); if (msgs) renderChat(msgs); return;
+      }
       case 'hz-fold': { const bar = el.closest('.hzbar'); bar.classList.toggle('col'); ls.set('hzcol', bar.classList.contains('col') ? '1' : '0'); return; }
       case 'home-set': closeSheet(); return go('me');
       case 'home-here': { const p = await locateOnce(); if (!p) return toast('Could not get your location. Check Location settings.', 'alert'); ls.set('home', JSON.stringify({ lat: p.lat, lng: p.lng })); render(); toast('Home saved on this phone only', 'home'); return; }
@@ -1229,13 +1313,13 @@ document.addEventListener('click', async (e) => {
       case 'report': { const [k, id] = arg.split(':'); return reportSheet(k, id); }
       case 'report-send': {
         const [k, id] = arg.split(':');
-        const { error } = await sb.from('reports').insert({ reporter: S.user.id, kind: k, target_id: id, reason: $('#repReason').value, note: $('#repNote').value.trim() || null });
+        const { error } = k === 'dm_msg' ? await sb.rpc('report_dm_message', { p_msg: id, p_reason: $('#repReason').value, p_note: $('#repNote').value.trim() || null }) : await sb.from('reports').insert({ reporter: S.user.id, kind: k, target_id: id, reason: $('#repReason').value, note: $('#repNote').value.trim() || null });
         if (error && error.code !== '23505') return fail(error);
         closeSheet(); toast(error ? 'You already reported this. Thank you.' : 'Thank you. We will look at it.', 'check'); return;
       }
       case 'mod-del': {
         if (!el.dataset.sure) { el.dataset.sure = '1'; el.textContent = 'Tap again to remove for everyone.'; return; }
-        const [k, id] = arg.split(':'); const table = { event: 'events', thread: 'threads', reply: 'thread_replies', hazard: 'hazards' }[k];
+        const [k, id] = arg.split(':'); const table = { event: 'events', thread: 'threads', reply: 'thread_replies', hazard: 'hazards', event_msg: 'event_messages' }[k];
         const { error } = await sb.from(table).delete().eq('id', id); if (error) return fail(error);
         closeSheet(); await loadSisterhood(); toast('Removed'); return;
       }
@@ -1247,7 +1331,7 @@ document.addEventListener('click', async (e) => {
         const { error } = await sb.from('threads').insert({ created_by: S.user.id, author: S.name, title, body: $('#thBody').value.trim() || null });
         if (error) return fail(error); closeSheet(); S.seg = 'threads'; await loadSisterhood(); toast('Thread posted', 'users'); return;
       }
-      case 'reply-send': { const text = $('#thReply').value.trim(); if (!text) return toast('Write a reply first', 'alert'); const { error } = await sb.from('thread_replies').insert({ thread_id: arg, created_by: S.user.id, author: S.name, body: text }); if (error) return fail(error); await loadSisterhood(); return openThread(arg, true); }
+      case 'reply-send': { const text = $('#thReply').value.trim(); if (!text) return toast('Write a reply first', 'alert'); const { error } = await sb.from('thread_replies').insert({ thread_id: arg, created_by: S.user.id, author: S.name, body: text, reply_to: S.reply ? S.reply.id : null }); S.reply = null; if (error) return fail(error); await loadSisterhood(); return openThread(arg, true); }
       case 'reply-del': { const [rid, tid] = arg.split(':'); const { error } = await sb.from('thread_replies').delete().eq('id', rid); if (error) return fail(error); await loadSisterhood(); return openThread(tid); }
       case 'thread-del': { if (!el.dataset.sure) { el.dataset.sure = '1'; el.textContent = 'Tap again to delete this thread and its replies.'; return; } const { error } = await sb.from('threads').delete().eq('id', arg); if (error) return fail(error); closeSheet(); await loadSisterhood(); toast('Thread deleted'); return; }
       case 'event-open': return eventSheet(arg);
