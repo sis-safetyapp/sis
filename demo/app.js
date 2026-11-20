@@ -528,7 +528,7 @@ function destroyMaps() { for (const k of Object.keys(maps)) { maps[k].map.remove
 function mountMap(key, el) {
   if (!el || !window.L) return null;
   const map = L.map(el, { zoomControl: false, attributionControl: true }).setView(TALLINN, 13);
-  L.tileLayer(`https://{s}.basemaps.cartocdn.com/${S.mode === 'night' ? 'dark_all' : 'light_all'}/{z}/{x}/{y}{r}.png`, { subdomains: 'abcd', maxZoom: 19, attribution: '© OpenStreetMap © CARTO' }).addTo(map);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
   el.classList.add('carto');
   const layer = L.layerGroup().addTo(map);
   maps[key] = { map, layer, fitted: false };
@@ -700,9 +700,7 @@ function hzInfoSheet(id) {
     <p class="small muted">In an emergency call 112 or your local number.</p>`);
 }
 function aroundCardHTML() {
-  const h = new Date().getHours(), greet = h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
   return `<div class="card hzcard"><div class="hzmap"><div class="map big" id="aroundMap"></div>
-    <div class="hzhi">${greet}, ${esc(S.name)}</div>
     <button class="hzloc" data-act="around-locate" aria-label="Show my location">${ic('locate')}</button>
     <div class="hzbar">
       <button class="main" data-act="walk">${ic('nav')}<span>Walk me home</span></button>
@@ -806,6 +804,7 @@ function meScreen() {
     </div><p class="small muted">${ic('lock')} Sharing stops when you tap "I'm home" and your location is deleted.</p></div>
     <div class="stack"><h2>Settings</h2><div class="list">
       <button class="item" data-act="toggle-auto"><span class="grow"><span class="t">Night mode at sunset</span><br><span class="s">Switches on by itself after dark</span></span><span class="toggle ${S.auto ? 'on' : ''}" role="switch" aria-checked="${S.auto}"></span></button>
+      <div class="item"><span class="grow"><span class="t">Theme</span><br><span class="s">${S.auto ? 'Following sunset' : S.mode === 'night' ? 'Dark, set by you' : 'Light, set by you'}</span></span><span class="row"><button class="btn ghost sm" data-act="mode:day">Light</button><button class="btn ghost sm" data-act="mode:night">Dark</button></span></div>
       <button class="item" data-act="notify"><span class="grow"><span class="t">Alerts</span><br><span class="s">${notif === 'granted' ? 'On. You get a notification while Sis is open.' : notif === 'denied' ? 'Blocked in browser settings.' : notif === 'unsupported' ? 'Not supported in this browser. Add Sis to your home screen.' : 'Tap to turn on.'}</span></span>${notif === 'granted' ? `<span class="pill safe">${ic('check')}On</span>` : ''}</button>
     </div></div>
     <div class="list">
@@ -820,8 +819,6 @@ function meScreen() {
 /* ---------------- render ---------------- */
 function applyMode() {
   document.body.classList.toggle('night', S.mode === 'night');
-  $('#mDay').innerHTML = ic('sun') + 'Day'; $('#mNight').innerHTML = ic('moon') + 'Night';
-  $('#mDay').classList.toggle('on', S.mode === 'day'); $('#mNight').classList.toggle('on', S.mode === 'night');
   document.querySelector('meta[name="theme-color"]').setAttribute('content', S.mode === 'night' ? '#121022' : '#F7F5F2');
 }
 function render() {

@@ -275,12 +275,15 @@ a.btn{text-decoration:none}
 .hzdot{width:14px;height:14px;border-radius:50%;flex:none}
 
 /* home: full map with action buttons */
-.map.big{height:calc(100dvh - 250px);min-height:400px;max-height:680px}
-body.night .map.carto .leaflet-tile-pane{filter:none}
-.hzhi{position:absolute;left:12px;top:12px;z-index:500;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:7px 13px;font-size:13px;font-weight:700;box-shadow:0 3px 10px rgba(0,0,0,.18)}
-.hzloc{left:12px;bottom:auto;top:56px;width:40px;height:40px}
 .hzbar{position:absolute;right:10px;top:12px;z-index:500;display:flex;flex-direction:column;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:26px;padding:7px;box-shadow:0 6px 18px rgba(0,0,0,.25)}
 .hzbar button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:62px;height:58px;border:0;border-radius:18px;background:var(--surface-2);color:var(--ink);font-size:10.5px;font-weight:700;line-height:1.1;text-align:center;cursor:pointer}
 .hzbar button .i{width:22px;height:22px}
 .hzbar button.main{background:var(--accent);color:#fff;height:68px}
 body.night .hzbar button.main{color:#1B1535}
+
+/* home: bigger map, softer tiles */
+.map.big{height:calc(100dvh - 200px);min-height:460px;max-height:760px}
+#banners:empty,#myCard:empty{display:none}
+.hzloc{left:12px;bottom:auto;top:12px;width:40px;height:40px}
+.map.carto .leaflet-tile-pane{filter:saturate(.45) brightness(1.07) contrast(.86)}
+body.night .map.carto .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.8) contrast(.9) saturate(.45)}
