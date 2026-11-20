@@ -266,8 +266,6 @@ a.btn{text-decoration:none}
 .map.big{height:min(52vh,460px);border-radius:0;border:0}
 .hzcard{padding:0;overflow:hidden}
 .hzmap{position:relative}
-.hzadd{position:absolute;right:14px;bottom:14px;z-index:500;display:flex;align-items:center;gap:6px;border:0;border-radius:999px;padding:12px 18px;background:var(--accent);color:#fff;font-weight:700;font-size:15px;box-shadow:0 6px 18px rgba(0,0,0,.28);cursor:pointer}
-.hzadd .i{width:20px;height:20px}
 .hzloc{position:absolute;left:14px;bottom:14px;z-index:500;width:44px;height:44px;border-radius:50%;border:0;display:grid;place-items:center;background:var(--surface);color:var(--ink);box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer}
 .hzfoot{padding:10px 14px 12px;margin:0}
 .hzpin .i{width:16px;height:16px;stroke:#fff}
@@ -275,3 +273,14 @@ a.btn{text-decoration:none}
 .hzk{display:flex;align-items:center;gap:10px;text-align:left;border:1.5px solid var(--line);background:var(--surface-2);color:var(--ink);border-radius:14px;padding:12px 14px;font-size:15px;cursor:pointer}
 .hzk.on{border-color:var(--accent);background:var(--accent-soft);font-weight:600}
 .hzdot{width:14px;height:14px;border-radius:50%;flex:none}
+
+/* home: full map with action buttons */
+.map.big{height:calc(100dvh - 250px);min-height:400px;max-height:680px}
+body.night .map.carto .leaflet-tile-pane{filter:none}
+.hzhi{position:absolute;left:12px;top:12px;z-index:500;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:7px 13px;font-size:13px;font-weight:700;box-shadow:0 3px 10px rgba(0,0,0,.18)}
+.hzloc{left:12px;bottom:auto;top:56px;width:40px;height:40px}
+.hzbar{position:absolute;right:10px;top:12px;z-index:500;display:flex;flex-direction:column;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:26px;padding:7px;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+.hzbar button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:62px;height:58px;border:0;border-radius:18px;background:var(--surface-2);color:var(--ink);font-size:10.5px;font-weight:700;line-height:1.1;text-align:center;cursor:pointer}
+.hzbar button .i{width:22px;height:22px}
+.hzbar button.main{background:var(--accent);color:#fff;height:68px}
+body.night .hzbar button.main{color:#1B1535}

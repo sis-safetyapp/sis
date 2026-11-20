@@ -528,7 +528,8 @@ function destroyMaps() { for (const k of Object.keys(maps)) { maps[k].map.remove
 function mountMap(key, el) {
   if (!el || !window.L) return null;
   const map = L.map(el, { zoomControl: false, attributionControl: true }).setView(TALLINN, 13);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+  L.tileLayer(`https://{s}.basemaps.cartocdn.com/${S.mode === 'night' ? 'dark_all' : 'light_all'}/{z}/{x}/{y}{r}.png`, { subdomains: 'abcd', maxZoom: 19, attribution: '© OpenStreetMap © CARTO' }).addTo(map);
+  el.classList.add('carto');
   const layer = L.layerGroup().addTo(map);
   maps[key] = { map, layer, fitted: false };
   setTimeout(() => { if (maps[key] && maps[key].map === map) map.invalidateSize(); }, 150);
@@ -661,6 +662,7 @@ async function hzLocate(quiet) {
 function updateHzMap() {
   const M = maps.around; if (!M) return;
   M.layer.clearLayers();
+  if (S.hzMe) L.circle([S.hzMe.lat, S.hzMe.lng], { radius: 300, color: '#7C4DFF', weight: 1.5, dashArray: '6 6', fillColor: '#7C4DFF', fillOpacity: 0.05, interactive: false }).addTo(M.layer);
   if (S.hzMe) L.circleMarker([S.hzMe.lat, S.hzMe.lng], { radius: 8, color: '#fff', weight: 2, fillColor: '#7C4DFF', fillOpacity: 1 }).addTo(M.layer);
   for (const h of hzLive()) {
     const k = HZ[h.kind] || HZ.other;
@@ -670,7 +672,8 @@ function updateHzMap() {
 }
 function hzMount() {
   const M = mountMap('around', $('#aroundMap')); if (!M) return;
-  if (S.hzMe) M.map.setView([S.hzMe.lat, S.hzMe.lng], 15);
+  M.map.setView(S.hzMe ? [S.hzMe.lat, S.hzMe.lng] : TALLINN, 15);
+  if (!S.hzMe && !S.hzAsked) { S.hzAsked = true; hzLocate(); }
   M.map.on('click', (e) => { if (S.hzPick && S.hzDraft) { S.hzPick = false; S.hzDraft.pt = { lat: e.latlng.lat, lng: e.latlng.lng }; hzSheet(); } });
   updateHzMap(); loadHazards();
 }
@@ -697,48 +700,25 @@ function hzInfoSheet(id) {
     <p class="small muted">In an emergency call 112 or your local number.</p>`);
 }
 function aroundCardHTML() {
-  return `<div class="card hzcard"><div class="hzmap"><div class="map big" id="aroundMap"></div>
-    <button class="hzadd" data-act="hz-new">${ic('plus')}<span>Report</span></button>
-    <button class="hzloc" data-act="around-locate" aria-label="Show my location">${ic('locate')}</button></div>
-    <p class="small muted hzfoot">Marks from other sisters fade on their own. Tap one to say if it is still there.</p></div>`;
-}
-function homeDay() {
-  const ss = sunTime(new Date(), false);
   const h = new Date().getHours(), greet = h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
-  return `<section class="screen">
-    <div><p class="eyebrow">${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
-      <h1>${greet}, ${esc(S.name)}</h1>
-      <span class="sunset">${ic('moon')}Sunset ${fmtTime(ss)} · ${S.auto ? 'night mode switches on by itself' : 'auto switch paused'}</span></div>
-    <div id="banners" class="stack">${bannersHTML()}</div>
-    <div id="myCard">${myCardHTML()}</div>
-    ${aroundCardHTML()}
-    <div class="qa">
-      <button data-act="arrived"><span class="ic">${ic('pin')}</span><span><b>I've arrived</b><span class="small">Tell your group you got there</span></span></button>
-      <button data-act="date"><span class="ic">${ic('heart')}</span><span><b>Date check-in</b><span class="small">Your group checks on you</span></span></button>
-      <button data-act="ride"><span class="ic">${ic('car')}</span><span><b>Share my ride</b><span class="small">Live location until you arrive</span></span></button>
-      <button data-act="trip"><span class="ic">${ic('globe')}</span><span><b>Plan a trip</b><span class="small">Find a travel buddy</span></span></button>
-    </div>
-    ${notifyPromptHTML()}
-    ${!LIVE && window.sisNearbyHome ? window.sisNearbyHome.card() : ''}
-  </section>`;
+  return `<div class="card hzcard"><div class="hzmap"><div class="map big" id="aroundMap"></div>
+    <div class="hzhi">${greet}, ${esc(S.name)}</div>
+    <button class="hzloc" data-act="around-locate" aria-label="Show my location">${ic('locate')}</button>
+    <div class="hzbar">
+      <button class="main" data-act="walk">${ic('nav')}<span>Walk me home</span></button>
+      <button data-act="hz-new">${ic('plus')}<span>Report</span></button>
+      <button data-act="date">${ic('heart')}<span>Date</span></button>
+      <button data-act="ride">${ic('car')}<span>Ride</span></button>
+      <button data-act="fakecall">${ic('phone')}<span>Fake call</span></button>
+    </div></div></div>`;
 }
-function homeNight() {
-  const me = myRow(), sharing = !!me?.sharing;
-  return `<section class="screen">
-    <div><p class="eyebrow">${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
-      <h1>${LIVE ? "We've got you tonight" : 'Your sisters are near'}, ${esc(S.name)}</h1>
-      <span class="sunset">${ic('moon')}Sunset ${fmtTime(sunTime(new Date(), false))} · sunrise ${fmtTime(sunTime(new Date(Date.now() + (new Date().getHours() >= 12 ? 864e5 : 0)), true))}</span></div>
+function homeScreen() {
+  return `<section class="screen homemap">
     <div id="banners" class="stack">${bannersHTML()}</div>
     <div id="myCard">${myCardHTML()}</div>
     ${aroundCardHTML()}
     ${notifyPromptHTML()}
     ${!LIVE && window.sisNearbyHome ? window.sisNearbyHome.card() : ''}
-    <div class="big2">
-      <button class="btn safe" data-act="home">${ic('home')}I'm home</button>
-      <button class="btn" data-act="walk">${ic('nav')}Walk me home</button>
-      <button class="btn ghost" data-act="safe-places">${ic('shieldok')}Safe places</button>
-      <button class="btn ghost" data-act="fakecall">${ic('phone')}Fake call</button>
-    </div>
   </section>`;
 }
 
@@ -849,7 +829,7 @@ function render() {
   applyMode(); destroyMaps();
   if (S.mode === 'night' && shareRule('night') && S.gid && S.watchId == null && !S.nightShared) { S.nightShared = true; startSharing(true); }
   const m = $('#main');
-  m.innerHTML = S.tab === 'home' ? (S.mode === 'night' ? homeNight() : homeDay()) : S.tab === 'places' ? placesScreen() : S.tab === 'sisterhood' ? sisterhoodScreen() : meScreen();
+  m.innerHTML = S.tab === 'home' ? (homeScreen()) : S.tab === 'places' ? placesScreen() : S.tab === 'sisterhood' ? sisterhoodScreen() : meScreen();
   renderTabs();
   if (S.tab === 'home' && $('#groupMap')) { mountMap('group', $('#groupMap')); updateGroupMap(); }
   if (S.tab === 'home' && !LIVE && window.sisNearbyHome) window.sisNearbyHome.mount();
