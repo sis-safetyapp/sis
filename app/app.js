@@ -702,24 +702,26 @@ function sisterhoodScreen() {
   if (seg === 'threads') {
     body = S.threads.length ? S.threads.map((th) => {
       const n = (th.thread_replies || []).length;
-      return `<div class="card stack"><h3>${esc(th.title)}</h3>${th.body ? `<p class="small muted">${esc(th.body.length > 110 ? th.body.slice(0, 110) + '…' : th.body)}</p>` : ''}
-        <div class="row between"><span class="small muted">${esc(th.author)} · ${n} ${n === 1 ? 'reply' : 'replies'} · ${ago(th.last_reply_at)}</span><button class="btn sm ghost" data-act="thread-open:${th.id}">Open</button></div></div>`;
-    }).join('') : `<div class="empty">${ic('users')}<b>No threads yet</b><span class="small">Ask a question or share a tip. Be kind.</span><button class="btn sm" data-act="new-thread">${ic('plus')}Start a thread</button></div>`;
+      return `<div class="card ev" data-act="thread-open:${th.id}" role="button" tabindex="0"><div>${avatar(th.author)}</div>
+        <div class="grow stack"><h3>${esc(th.title)}</h3>${th.body ? `<p class="small muted">${esc(th.body.length > 100 ? th.body.slice(0, 100) + '…' : th.body)}</p>` : ''}
+        <p class="small muted">${esc(th.author)} · ${n ? `${n} ${n === 1 ? 'reply' : 'replies'}` : 'no replies yet'} · ${ago(th.last_reply_at)}</p></div></div>`;
+    }).join('') : `<div class="empty">${ic('users')}<b>It is quiet here</b><span class="small">Ask something, share a tip, say hi. Everyone here is kind.</span><button class="btn sm" data-act="new-thread">${ic('plus')}Start a conversation</button></div>`;
   } else {
     const list = upcomingEvents();
     body = list.length ? list.map((e) => {
       const mine = (e.event_members || []).some((x) => x.user_id === S.user.id), left = eventSpotsLeft(e);
+      const d = new Date(e.starts_at);
+      const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
       const join = mine ? `<button class="pill safe" data-act="event-leave:${e.id}">${ic('check')}I'm in</button>`
         : left === 0 ? '<span class="pill">Full</span>' : `<button class="btn sm" data-act="event-join:${e.id}">I'm in</button>`;
-      return `<div class="card stack"><div class="row between"><span class="pill">${EVENT_KINDS[e.kind] || 'Event'}</span><span class="small muted">${esc(fmtWhen(e.starts_at))}</span></div>
-        <h3>${esc(e.title)}</h3>${e.place ? `<p class="small muted">${esc(e.place)}</p>` : ''}
-        <p class="small muted">${eventCountLine(e)}</p>
-        <div class="row between"><button class="btn sm ghost" data-act="event-open:${e.id}">Details</button>${join}</div></div>`;
-    }).join('') : `<div class="empty">${ic('users')}<b>No events yet</b><span class="small">Create the first one: a walk, a coffee or a trip.</span><button class="btn sm" data-act="new-event:meetup">${ic('plus')}Create an event</button></div>`;
+      return `<div class="card ev" data-act="event-open:${e.id}" role="button" tabindex="0"><div class="datebox"><b>${d.getDate()}</b><span>${d.toLocaleDateString('en-GB', { month: 'short' })}</span></div>
+        <div class="grow stack"><h3>${esc(e.title)}</h3><p class="small muted">${time}${e.place ? ' · ' + esc(e.place) : ''}</p>
+        <div class="row between"><span class="small muted">${eventCountLine(e)}</span>${join}</div></div></div>`;
+    }).join('') : `<div class="empty">${ic('users')}<b>No plans yet</b><span class="small">Planning a walk, a coffee or a trip? Invite the others.</span><button class="btn sm" data-act="new-event:meetup">${ic('plus')}Plan something</button></div>`;
   }
   return `<section class="screen">
-    <div class="row between"><div><h1>Community</h1><p class="muted" style="margin-top:4px">Meet other women in person, or just talk.</p></div><button class="btn sm" data-act="${seg === 'threads' ? 'new-thread' : 'new-event:meetup'}" aria-label="${seg === 'threads' ? 'Start a thread' : 'Create an event'}">${ic('plus')}${seg === 'threads' ? 'Thread' : 'Event'}</button></div>
-    <div class="seg">${[['events', 'Events'], ['threads', 'Threads']].map(([k, l]) => `<button class="${seg === k ? 'on' : ''}" data-act="seg:${k}">${l}</button>`).join('')}</div>
+    <div class="row between"><div><h1>Community</h1><p class="muted" style="margin-top:4px">Meet other women in person, or just talk.</p></div><button class="btn sm" data-act="${seg === 'threads' ? 'new-thread' : 'new-event:meetup'}" aria-label="${seg === 'threads' ? 'Start a conversation' : 'Plan something'}">${ic('plus')}${seg === 'threads' ? 'Talk' : 'Plan'}</button></div>
+    <div class="seg">${[['events', 'Plans'], ['threads', 'Conversations']].map(([k, l]) => `<button class="${seg === k ? 'on' : ''}" data-act="seg:${k}">${l}</button>`).join('')}</div>
     <div class="stack">${body}</div></section>`;
 }
 
@@ -931,24 +933,29 @@ function eventSheet(id) {
 function newEventSheet(kind) {
   const d = new Date(Date.now() + 24 * 3600e3); d.setHours(18, 0, 0, 0);
   const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-  openSheet(`${sheetHead('Create an event')}
-    <div class="field"><span class="lab">Type</span><div class="pick" id="eKind">${Object.entries(EVENT_KINDS).map(([k, l]) => `<button class="${k === (kind || 'meetup') ? 'on' : ''}" data-act="pick-one" data-v="${k}">${l}</button>`).join('')}</div></div>
-    <div class="field"><label for="eTitle">Title</label><input id="eTitle" maxlength="80" placeholder="e.g. Sunday walk in Kadriorg"></div>
+  openSheet(`${sheetHead('Plan something together')}
+    <p class="muted">A walk, a coffee, a day trip. Others can join with one tap.</p>
+    <div class="field"><label for="eTitle">What are we doing?</label><input id="eTitle" maxlength="80" placeholder="e.g. Sunday walk in Kadriorg"></div>
     <div class="field"><label for="eWhen">When</label><input id="eWhen" type="datetime-local" value="${local}"></div>
-    <div class="field"><label for="ePlace">Where</label><input id="ePlace" maxlength="120" placeholder="A public place, e.g. Kadriorg Park entrance"></div>
-    <div class="field"><label for="eCap">Spots (optional)</label><input id="eCap" type="number" min="2" max="100" inputmode="numeric" placeholder="Leave empty for no limit"></div>
-    <div class="field"><label for="eDesc">Details (optional)</label><input id="eDesc" maxlength="300"></div>
-    <p class="small muted">Other women see your first name. Please choose a public place.</p>
-    <button class="btn block" data-act="event-save">Create event</button>`);
+    <div class="field"><label for="ePlace">Where</label><input id="ePlace" maxlength="120" placeholder="A public place, e.g. park entrance"></div>
+    <details class="more"><summary>Add details (optional)</summary>
+      <div class="field"><label for="eCap">How many spots?</label><input id="eCap" type="number" min="2" max="100" inputmode="numeric" placeholder="Leave empty for no limit"></div>
+      <div class="field"><label for="eDesc">Anything else?</label><input id="eDesc" maxlength="300" placeholder="Pace, what to bring, how to find us"></div>
+    </details>
+    <p class="small muted">Others will see your first name. Please choose a public place.</p>
+    <button class="btn block" data-act="event-save">Create plan</button>`);
 }
 function threadSheet(th, replies, toEnd) {
   const own = th.created_by === S.user.id;
+  const tiny = (act, label) => `<button class="tiny" data-act="${act}">${label}</button>`;
+  const mod = (kind, id) => (S.admin ? tiny(`mod-del:${kind}:${id}`, 'Remove (moderator)') : '');
+  const bubble = (who, text, ts, mine, actions) => `<div class="bub${mine ? ' me' : ''}"><div class="who">${esc(who)} · ${ago(ts)}</div>${text ? `<p>${esc(text)}</p>` : ''}${actions}</div>`;
+  const first = bubble(th.author, th.body, th.created_at, own, own ? tiny(`thread-del:${th.id}`, 'Delete') : tiny(`report:thread:${th.id}`, 'Report') + mod('thread', th.id));
+  const list = replies.map((r) => bubble(r.author, r.body, r.created_at, r.created_by === S.user.id,
+    r.created_by === S.user.id ? tiny(`reply-del:${r.id}:${th.id}`, 'Delete') : tiny(`report:reply:${r.id}`, 'Report') + mod('reply', r.id))).join('');
   openSheet(`${sheetHead(esc(th.title))}
-    <p class="small muted">${esc(th.author)} · ${ago(th.created_at)}</p>
-    ${th.body ? `<p>${esc(th.body)}</p>` : ''}${own ? `<button class="btn ghost sm" data-act="thread-del:${th.id}">Delete my thread</button>` : `<button class="btn ghost sm" data-act="report:thread:${th.id}">Report</button>${S.admin ? `<button class="btn ghost sm" data-act="mod-del:thread:${th.id}">Remove (moderator)</button>` : ''}`}
-    <div class="stack"><b>${replies.length} ${replies.length === 1 ? 'reply' : 'replies'}</b>${replies.map((r) => `<div class="card"><div class="row between"><b class="small">${esc(r.author)}</b><span class="small muted">${ago(r.created_at)}</span></div><p>${esc(r.body)}</p>${r.created_by === S.user.id ? `<button class="btn sm ghost" data-act="reply-del:${r.id}:${th.id}">Delete my reply</button>` : `<button class="btn sm ghost" data-act="report:reply:${r.id}">Report</button>${S.admin ? `<button class="btn sm ghost" data-act="mod-del:reply:${r.id}">Remove (moderator)</button>` : ''}`}</div>`).join('')}</div>
-    <div class="field"><label for="thReply">Your reply</label><input id="thReply" maxlength="500" placeholder="Be kind. Be helpful."></div>
-    <button class="btn block" data-act="reply-send:${th.id}">Reply</button>
+    <div class="chat">${first}${list || '<p class="small muted" style="text-align:center">No replies yet. Be the first.</p>'}</div>
+    <div class="composer"><input id="thReply" maxlength="500" placeholder="Write a reply…" aria-label="Your reply"><button class="btn" data-act="reply-send:${th.id}">Send</button></div>
     <p class="small muted">Please don't share names, photos or details that identify other people.</p>`);
   if (toEnd) $('#sheet').scrollTop = $('#sheet').scrollHeight;
 }
@@ -965,11 +972,15 @@ function reportSheet(kind, id) {
     <button class="btn block" data-act="report-send:${kind}:${id}">Send report</button>`);
 }
 function newThreadSheet() {
-  openSheet(`${sheetHead('Start a thread')}
-    <div class="field"><label for="thTitle">Title</label><input id="thTitle" maxlength="100" placeholder="e.g. Safe ways to get home late?"></div>
-    <div class="field"><label for="thBody">Details (optional)</label><input id="thBody" maxlength="1000"></div>
-    <p class="small muted">Other women see your first name. Please don't share names, photos or details that identify other people.</p>
-    <button class="btn block" data-act="thread-save">Post thread</button>`);
+  const ex = ['How do you get home safely after dark?', 'New here: where do you meet people?', 'Tips for travelling solo?'];
+  openSheet(`${sheetHead('Start a conversation')}
+    <div class="field"><label for="thTitle">What would you like to ask or share?</label><input id="thTitle" maxlength="100" placeholder="Type here, or tap an idea below"></div>
+    <div class="ideas">${ex.map((x) => `<button data-act="thread-example" data-v="${esc(x)}">${esc(x)}</button>`).join('')}</div>
+    <details class="more"><summary>Add more details (optional)</summary>
+      <div class="field"><input id="thBody" maxlength="1000" placeholder="Tell us a bit more" aria-label="More details"></div>
+    </details>
+    <p class="small muted">Others will see your first name. Please don't share names, photos or details that identify other people.</p>
+    <button class="btn block" data-act="thread-save">Post</button>`);
 }
 function profileSheet() {
   openSheet(`${sheetHead('Edit profile')}
@@ -1123,6 +1134,7 @@ document.addEventListener('click', async (e) => {
         const { error } = await sb.from(table).delete().eq('id', id); if (error) return fail(error);
         closeSheet(); await loadSisterhood(); toast('Removed'); return;
       }
+      case 'thread-example': $('#thTitle').value = el.dataset.v; return;
       case 'thread-open': return openThread(arg);
       case 'new-thread': return newThreadSheet();
       case 'thread-save': {
@@ -1142,9 +1154,9 @@ document.addEventListener('click', async (e) => {
         const title = $('#eTitle').value.trim(); if (!title) return toast('Give the event a title', 'alert');
         const when = new Date($('#eWhen').value); if (isNaN(when) || when.getTime() < Date.now()) return toast('Pick a time in the future', 'alert');
         const cap = parseInt($('#eCap').value, 10) || null; if (cap !== null && (cap < 2 || cap > 100)) return toast('Spots: between 2 and 100', 'alert');
-        const { data, error } = await sb.from('events').insert({ created_by: S.user.id, organizer: S.name, title, kind: picked('#eKind') || 'meetup', starts_at: when.toISOString(), place: $('#ePlace').value.trim() || null, capacity: cap, description: $('#eDesc').value.trim() || null }).select().single();
+        const { data, error } = await sb.from('events').insert({ created_by: S.user.id, organizer: S.name, title, kind: 'meetup', starts_at: when.toISOString(), place: $('#ePlace').value.trim() || null, capacity: cap, description: $('#eDesc').value.trim() || null }).select().single();
         if (error) return fail(error);
-        await sb.rpc('join_event', { p_event: data.id, p_name: S.name }); closeSheet(); await loadSisterhood(); toast('Event created', 'users'); return;
+        await sb.rpc('join_event', { p_event: data.id, p_name: S.name }); closeSheet(); await loadSisterhood(); toast('Plan created', 'users'); return;
       }
       case 'edit-profile': return profileSheet();
       case 'profile-save': {
