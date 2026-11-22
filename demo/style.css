@@ -302,3 +302,9 @@ body.night .map.carto .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) bri
 .replybar{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;padding:6px 10px;border-radius:10px;background:var(--surface-2);margin-bottom:6px}
 .replybar[hidden]{display:none}
 .replybar button{border:0;background:transparent;color:var(--ink);font-size:14px;cursor:pointer}
+
+/* community: one-row tabs, round add button */
+.seg:has(button:nth-child(3)){grid-template-columns:repeat(3,1fr)}
+.fab{position:sticky;bottom:14px;align-self:flex-end;margin-left:auto;z-index:20;width:56px;height:56px;border-radius:50%;border:0;display:grid;place-items:center;background:var(--accent);color:#fff;box-shadow:0 6px 18px rgba(0,0,0,.28);cursor:pointer}
+body.night .fab{color:#1B1535}
+.fab .i{width:26px;height:26px}

@@ -797,9 +797,9 @@ function sisterhoodScreen() {
   }
   const act = seg === 'threads' ? ['new-thread', 'Topic'] : seg === 'events' ? ['new-event:meetup', 'Event'] : null;
   return `<section class="screen">
-    <div class="row between"><div><h1>Community</h1><p class="muted" style="margin-top:4px">Meet other women in person, or just talk.</p></div>${act ? `<button class="btn sm" data-act="${act[0]}" aria-label="${act[1]}">${ic('plus')}${act[1]}</button>` : ''}</div>
+    <div><h1>Community</h1><p class="muted" style="margin-top:4px">Meet other women in person, or just talk.</p></div>
     <div class="seg">${[['events', 'Events'], ['threads', 'Topics'], ['chats', 'Chats']].map(([k, l]) => `<button class="${seg === k ? 'on' : ''}" data-act="seg:${k}">${l}</button>`).join('')}</div>
-    <div class="stack">${body}</div></section>`;
+    <div class="stack">${body}</div>${act ? `<button class="fab" data-act="${act[0]}" aria-label="${act[1]}">${ic('plus')}</button>` : ''}</section>`;
 }
 
 const SHARE_RULES = [
