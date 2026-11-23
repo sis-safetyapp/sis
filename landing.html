@@ -73,7 +73,7 @@
 <div class="lv-head"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></i><span><b>Evening walk, Kalamaja</b><small>Balti jaam &middot; Sat 19:00</small></span></div>
 <div class="lv-evt">Meet at Balti jaam. Tea and a slow walk through Kalamaja.</div>
 <div class="lv-feed"><div class="lv-m  m1"><b>M</b><p><small>Mia</small>Great walk tonight, girls!</p></div><div class="lv-m  m2"><b>A</b><p><small>Anna</small>Heading home now, sharing my walk</p></div><div class="lv-m me m3"><p>Text us when you&rsquo;re in!</p></div><div class="lv-m  m4"><b>S</b><p><small>Sofia</small>Almost home too, 10 min left</p></div><div class="lv-m me m5"><p>I&rsquo;ll watch your dot on the map</p></div><div class="lv-typing"><b>M</b><span><i></i><i></i><i></i></span></div></div>
-<div class="lv-input"><span>Message</span><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></i></div></div></div></div>
+<div class="lv-input"><span>Message</span><em class="lv-d d1">Text us when you&rsquo;re in!</em><em class="lv-d d2">I&rsquo;ll watch your dot on the map</em><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></i></div></div></div></div>
         </div>
       </div>
     </section>
@@ -291,5 +291,38 @@
   </footer>
 
   <a class="sticky-cta" href="mailto:sis.safetyapp@gmail.com?subject=Early%20access%20to%20sis.">Get early access <span class="btn-arrow" aria-hidden="true">↗</span></a>
+
+  <dialog id="wl" class="wl" aria-labelledby="wl-t">
+    <form method="dialog" class="wl-x"><button aria-label="Close">&times;</button></form>
+    <form id="wl-form" class="wl-f" novalidate>
+      <h2 id="wl-t">Get early access</h2>
+      <p>Leave your email and we will write to you when your spot opens. No spam, ever.</p>
+      <input id="wl-email" type="email" required placeholder="you@example.com" autocomplete="email" aria-label="Email address">
+      <button class="btn btn-primary" type="submit">Join the waitlist</button>
+      <p class="wl-msg" id="wl-msg" role="status" aria-live="polite"></p>
+    </form>
+  </dialog>
+  <script id="waitlist-js">
+  (function(){
+    var URL_='https://qronnfjrlvhsomggmpmv.supabase.co', KEY='sb_publishable_HjN6tXUOx44lm_gGbN1MCw_7rHfXE-v';
+    var d=document.getElementById('wl'); if(!d||!d.showModal) return;
+    var f=document.getElementById('wl-form'), e=document.getElementById('wl-email'), m=document.getElementById('wl-msg');
+    document.addEventListener('click',function(ev){
+      var a=ev.target.closest&&ev.target.closest('a[href^="mailto:sis.safetyapp"]');
+      if(a){ev.preventDefault();m.textContent='';d.showModal();e.focus();return;}
+      if(ev.target===d) d.close();
+    });
+    f.addEventListener('submit',function(ev){
+      ev.preventDefault();
+      var v=e.value.trim();
+      if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){m.textContent='Please enter a valid email.';return;}
+      var b=f.querySelector('button[type=submit]'); b.disabled=true; m.textContent='';
+      fetch(URL_+'/rest/v1/waitlist',{method:'POST',headers:{'Content-Type':'application/json',apikey:KEY,Prefer:'return=minimal'},body:JSON.stringify({email:v,source:'landing'})})
+        .then(function(r){ if(r.ok||r.status===409){ e.value=''; m.textContent='Thank you! We will write to you soon.'; } else { m.textContent='Something went wrong. Please try again.'; } })
+        .catch(function(){ m.textContent='No connection. Please try again.'; })
+        .then(function(){ b.disabled=false; });
+    });
+  })();
+  </script>
 </body>
 </html>

@@ -408,3 +408,23 @@ details p { padding: 0 22px 20px; color: var(--muted); }
 .lv-top b{font-size:5.6cqw;font-weight:800;letter-spacing:-.02em}
 .lv-top s{text-decoration:none;color:#6DD3A3}
 .lv-top em{margin-left:auto;font-size:2.9cqw;font-weight:700;color:#A9A2C8}
+
+/* early access popup */
+.wl{border:1px solid #2E2753;border-radius:24px;background:#1B1535;color:#F3F0FF;padding:28px 24px 24px;width:min(92vw,420px);box-shadow:0 30px 80px rgba(0,0,0,.6);margin:auto}
+.wl::backdrop{background:rgba(10,7,22,.72);backdrop-filter:blur(3px)}
+.wl h2{margin:0 0 8px;font-size:26px;line-height:1.15}
+.wl p{margin:0 0 16px;color:#A9A2C8;font-size:15px;line-height:1.45}
+.wl-f{display:flex;flex-direction:column}
+.wl input{width:100%;box-sizing:border-box;border-radius:14px;border:1px solid #3a3068;background:#131021;color:#F3F0FF;padding:15px 16px;font:inherit;font-size:16px;margin-bottom:12px}
+.wl input:focus{outline:2px solid #B49CFF;outline-offset:1px}
+.wl .btn{width:100%;justify-content:center;cursor:pointer;border:0}
+.wl .wl-msg{margin:12px 0 0;min-height:20px;font-size:14px;color:#6DD3A3}
+.wl-x{position:absolute;top:10px;right:12px;margin:0}
+.wl-x button{width:36px;height:36px;border-radius:50%;border:0;background:#262046;color:#F3F0FF;font-size:22px;line-height:1;cursor:pointer}
+
+/* typing in the chat input before her own messages */
+.lv-d{position:absolute;left:4.5cqw;top:50%;transform:translateY(-50%);overflow:hidden;white-space:nowrap;background:#1B1535;color:#F3F0FF;opacity:0;width:0;padding:1cqw 0;border-right:.4cqw solid #B49CFF;font-size:3.3cqw}
+.lv-d.d1{animation:lvd1 18s steps(22,end) both}
+.lv-d.d2{animation:lvd2 18s steps(28,end) both}
+@keyframes lvd1{0%,22.9%{width:0;opacity:0}23%{width:0;opacity:1}29.5%{width:56cqw;opacity:1}30.5%,100%{width:56cqw;opacity:0}}
+@keyframes lvd2{0%,47.9%{width:0;opacity:0}48%{width:0;opacity:1}54.5%{width:56cqw;opacity:1}55.5%,100%{width:56cqw;opacity:0}}
