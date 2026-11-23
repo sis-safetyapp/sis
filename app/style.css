@@ -308,3 +308,16 @@ body.night .map.carto .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) bri
 .fab{position:sticky;bottom:14px;align-self:flex-end;margin-left:auto;z-index:20;width:56px;height:56px;border-radius:50%;border:0;display:grid;place-items:center;background:var(--accent);color:#fff;box-shadow:0 6px 18px rgba(0,0,0,.28);cursor:pointer}
 body.night .fab{color:#1B1535}
 .fab .i{width:26px;height:26px}
+
+/* slim side menu (round icons) + wide Walk me home */
+.greet{font-size:13px;font-weight:700;color:var(--muted);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.hzbar{gap:6px;padding:6px;border-radius:999px}
+.hzbar button{width:46px;height:46px;border-radius:50%;font-size:0}
+.hzbar button span{display:none}
+.hzbar button .i{width:22px;height:22px}
+.hzbar .hzmore button[data-act="hz-new"]{background:var(--accent);color:#fff}
+body.night .hzbar .hzmore button[data-act="hz-new"]{color:#1B1535}
+.hzbar button.hzt{width:46px;height:22px;border-radius:11px}
+.hzwalk{position:absolute;left:14px;right:14px;bottom:18px;z-index:500;display:flex;align-items:center;justify-content:center;gap:8px;height:52px;border:0;border-radius:18px;background:var(--accent);color:#fff;font:inherit;font-weight:800;font-size:16px;box-shadow:0 6px 18px rgba(0,0,0,.3);cursor:pointer}
+.hzwalk .i{width:20px;height:20px}
+body.night .hzwalk{color:#1B1535}

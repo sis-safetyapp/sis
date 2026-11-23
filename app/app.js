@@ -707,15 +707,16 @@ function aroundCardHTML() {
   return `<div class="card hzcard"><div class="hzmap"><div class="map big" id="aroundMap"></div>
     <button class="hzloc" data-act="around-locate" aria-label="Show my location">${ic('locate')}</button>
     <div class="hzbar${ls.get('hzcol') === '1' ? ' col' : ''}">
-      <button class="main" data-act="walk">${ic('nav')}<span>Walk me home</span></button>
       <div class="hzmore">
-        <button data-act="hz-new">${ic('plus')}<span>Report</span></button>
-        <button data-act="date">${ic('heart')}<span>Date</span></button>
-        <button data-act="ride">${ic('car')}<span>Ride</span></button>
-        <button data-act="fakecall">${ic('phone')}<span>Fake call</span></button>
+        <button data-act="hz-new" aria-label="Report a hazard" title="Report">${ic('plus')}<span>Report</span></button>
+        <button data-act="date" aria-label="Date check-in" title="Date check-in">${ic('heart')}<span>Date</span></button>
+        <button data-act="ride" aria-label="Share my ride" title="Share my ride">${ic('car')}<span>Ride</span></button>
+        <button data-act="fakecall" aria-label="Fake call" title="Fake call">${ic('phone')}<span>Fake call</span></button>
       </div>
       <button class="hzt" data-act="hz-fold" aria-label="Show or hide buttons"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-    </div></div></div>`;
+    </div>
+    <button class="hzwalk" data-act="walk">${ic('nav')}<span>Walk me home</span></button>
+  </div></div>`;
 }
 function homeScreen() {
   return `<section class="screen homemap">
@@ -837,6 +838,8 @@ function meScreen() {
 /* ---------------- render ---------------- */
 function applyMode() {
   document.body.classList.toggle('night', S.mode === 'night');
+  const gEl = document.getElementById('greet');
+  if (gEl) { const h = new Date().getHours(); const w = h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; const n = String(S.name || '').trim().split(' ')[0]; gEl.textContent = n ? `${w}, ${n}` : w; }
   document.querySelector('meta[name="theme-color"]').setAttribute('content', S.mode === 'night' ? '#121022' : '#F7F5F2');
 }
 function render() {
