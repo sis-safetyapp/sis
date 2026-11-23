@@ -160,6 +160,66 @@ function demoDb() {
   };
   ['p1', 'p2', 'p5', 'p7'].forEach((id) => { T.places.find((x) => x.id === id).badge = true; });
   [['e1', ['Kati', 'Maria', 'Sofia']], ['e2', ['Liis']], ['e3', ['Kati']]].forEach(([eid, names]) => names.forEach((n) => T.event_members.push({ event_id: eid, user_id: 'u-' + n.toLowerCase() + eid, name: n })));
+
+  /* richer demo data: a lived-in account */
+  const myName = ls.get('name') || 'Jana';
+  T.group_members.push(
+    member('g1', 'u-mia', 'Mia', { place: 'Café Lumi', sharing: true, ...at(90, 170), accuracy: 14, located_at: iso(-2) }),
+    member('g1', 'u-sofia', 'Sofia', { place: 'Gym' }),
+    member('g2', 'u-mia', 'Mia', { place: 'Kuu Bar', sharing: true, ...at(-10, 60), accuracy: 12, located_at: iso(-4) })
+  );
+  T.places.push(place('p9', 'Balti jaam station', 'Transport', 'Kalamaja', 290, -500), place('p10', 'Noblessner promenade', 'Street', 'Kalamaja', 520, -1250), place('p11', 'Café Kohv & Raamat', 'Café', 'Rotermann', 380, 720));
+  T.reviews.push(
+    review('p9', 'Mari', 'safe', ['Well-lit street', 'Taxi or transport nearby'], [], 'Busy and bright until late, felt calm even at 21:00.', 500),
+    review('p9', 'Anna', 'mixed', ['Taxi or transport nearby'], ['Crowded exit'], 'Watch your bag in rush hour.', 2600),
+    review('p10', 'Kadri', 'safe', ['Well-lit street', 'Women-friendly crowd'], [], 'Lovely evening walk by the sea, lots of people around.', 1700),
+    review('p11', 'Liis', 'safe', ['Staff responsive', 'Women-friendly crowd'], [], 'Calm corner for a book, staff were really kind.', 900),
+    review('p11', 'Sofia', 'safe', ['Well-lit street'], [], '', 3300)
+  );
+  ['p9', 'p10'].forEach((id) => { T.places.find((x) => x.id === id).badge = true; });
+  T.events.push(
+    { id: 'e4', created_by: 'u-mia', organizer: 'Mia', title: 'Evening walk, Kalamaja', kind: 'walk', starts_at: iso(26 * 60), place: 'Balti jaam, main entrance', capacity: 8, description: 'Tea at the market, then a slow walk through Kalamaja. We walk home together after.', created_at: iso(-400) },
+    { id: 'e5', created_by: 'u-nika', organizer: 'Nika', title: 'Yoga in the park', kind: 'meetup', starts_at: iso(3 * 1440 + 600), place: 'Kadriorg, rose garden', capacity: 12, description: 'Beginners welcome, bring a mat.', created_at: iso(-700) },
+    { id: 'e6', created_by: 'u-anna', organizer: 'Anna', title: 'Board games night', kind: 'meetup', starts_at: iso(6 * 1440 + 300), place: 'Café Lumi, Kalamaja', capacity: 10, description: 'Snacks, games and good company.', created_at: iso(-90) }
+  );
+  [['e1', ['Anna', 'Nika']], ['e4', ['Mia', 'Sofia', 'Anna', 'Kati']], ['e5', ['Nika', 'Mari']], ['e6', ['Anna', 'Liis', 'Kadri']]].forEach(([eid, names]) => names.forEach((n) => T.event_members.push({ event_id: eid, user_id: 'u-' + n.toLowerCase() + eid, name: n })));
+  ['e1', 'e4'].forEach((eid) => T.event_members.push({ event_id: eid, user_id: 'me', name: myName }));
+  const em = (id, eid, by, author, body, min, reply) => ({ id, event_id: eid, created_by: by, author, body, reply_to: reply || null, created_at: iso(-min) });
+  T.event_messages = [
+    em('em1', 'e4', 'u-mia', 'Mia', 'We meet at the main entrance at 19:00. Who is bringing tea?', 300),
+    em('em2', 'e4', 'u-sofia', 'Sofia', 'I will! Thermos for everyone.', 280),
+    em('em3', 'e4', 'me', myName, 'Perfect, I will bring cookies.', 250, 'em1'),
+    em('em4', 'e4', 'u-anna', 'Anna', 'Walking home together after? I live near Telliskivi.', 120),
+    em('em5', 'e4', 'u-mia', 'Mia', 'Yes! We will share our walks in sis. so everyone gets home safe.', 90, 'em4'),
+    em('em6', 'e4', 'u-kati', 'Kati', 'Count me in, see you there.', 30),
+    em('em7', 'e1', 'u-kati', 'Kati', 'Easy pace, we stop for coffee at the Kadriorg café.', 600),
+    em('em8', 'e1', 'u-nika', 'Nika', 'Can I bring my dog?', 400),
+    em('em9', 'e1', 'u-kati', 'Kati', 'Of course, dogs are very welcome.', 380, 'em8'),
+    em('em10', 'e1', 'u-anna', 'Anna', 'Weather looks good for Sunday!', 60)
+  ];
+  T.threads.push(
+    { id: 'th3', created_by: 'u-mari', author: 'Mari', title: 'Favourite cafés that stay open late?', body: 'Looking for calm places to sit with a book after 21:00.', created_at: iso(-500), last_reply_at: iso(-60) },
+    { id: 'th4', created_by: 'u-nika', author: 'Nika', title: 'Self-defence classes in Tallinn', body: null, created_at: iso(-4000), last_reply_at: iso(-1000) }
+  );
+  T.thread_replies.push(
+    { id: 'tr4', thread_id: 'th3', created_by: 'u-kadri', author: 'Kadri', body: 'Café Lumi is open until 23:00 and the staff are lovely.', created_at: iso(-300) },
+    { id: 'tr5', thread_id: 'th3', created_by: 'u-liis', author: 'Liis', body: 'Seconded! The window seats are the best.', created_at: iso(-60) },
+    { id: 'tr6', thread_id: 'th4', created_by: 'u-sofia', author: 'Sofia', body: 'I went to a beginners class near Telliskivi, it was great.', created_at: iso(-1000) }
+  );
+  T.thread_pins = [{ thread_id: 'th3', user_id: 'me' }];
+  T.hazards.push(
+    { id: 'hz5', kind: 'lighting', note: 'Dark underpass near the station', ...at(150, -380), created_at: iso(-60 * 24 * 2), expires_at: iso(60 * 24 * 28) },
+    { id: 'hz6', kind: 'group', note: null, ...at(210, 310), created_at: iso(-70), expires_at: iso(110) }
+  );
+  T.dm_threads = [{ id: 'd1', other: 'u-kati', other_name: 'Kati' }, { id: 'd2', other: 'u-nika', other_name: 'Nika' }];
+  const dmm = (id, dm, by, body, min) => ({ id, dm_id: dm, created_by: by, body, reply_to: null, created_at: iso(-min) });
+  T.dm_messages = [
+    dmm('dm1', 'd1', 'u-kati', 'Hi! Are you joining the Kadriorg walk on Sunday?', 180),
+    dmm('dm2', 'd1', 'me', 'Yes, see you at the entrance!', 170),
+    dmm('dm3', 'd1', 'u-kati', 'Wonderful, I will save you a coffee.', 160),
+    dmm('dm4', 'd2', 'u-nika', 'Home safe, thank you for walking with me.', 1500),
+    dmm('dm5', 'd2', 'me', 'Sleep well!', 1490)
+  ];
   let seq = 0;
   const newId = () => 'x' + (++seq) + Math.random().toString(36).slice(2, 6);
   const code = () => Math.random().toString(16).slice(2, 8).toUpperCase();
@@ -221,7 +281,7 @@ function demoDb() {
     return b;
   }
   const session = { user: { id: 'me' } };
-  const offsets = { 'u-reem': [120, -90], 'u-swathi': [-180, 160] };
+  const offsets = { 'u-reem': [120, -90], 'u-swathi': [-180, 160], 'u-mia': [90, 170] };
   return {
     from,
     demoAnchor(o) {
@@ -252,8 +312,16 @@ function demoDb() {
         if (!there) T.event_members.push({ event_id: ev.id, user_id: 'me', name: a.p_name });
         return { data: null, error: null };
       }
-      if (name === 'my_dms') return { data: [], error: null };
-      if (name === 'start_dm') return { data: null, error: { message: 'Private chats work in the live app' } };
+      if (name === 'my_dms') {
+        const rows = T.dm_threads.map((t) => { const ms = T.dm_messages.filter((m) => m.dm_id === t.id).sort((x, y) => (x.created_at > y.created_at ? 1 : -1)); const l = ms[ms.length - 1]; return { id: t.id, other: t.other, other_name: t.other_name, last_body: l ? l.body : null, last_at: l ? l.created_at : new Date().toISOString() }; });
+        rows.sort((x, y) => (x.last_at < y.last_at ? 1 : -1));
+        return { data: rows, error: null };
+      }
+      if (name === 'start_dm') {
+        let t = T.dm_threads.find((x) => x.other === a.p_other);
+        if (!t) { const nm = String(a.p_other).replace(/^u-/, '').replace(/e\d+$/, ''); t = { id: newId(), other: a.p_other, other_name: nm.charAt(0).toUpperCase() + nm.slice(1) }; T.dm_threads.push(t); }
+        return { data: t.id, error: null };
+      }
       return { data: null, error: { message: 'Unknown action' } };
     },
     auth: {
@@ -724,7 +792,6 @@ function homeScreen() {
     <div id="myCard">${myCardHTML()}</div>
     ${aroundCardHTML()}
     ${notifyPromptHTML()}
-    ${!LIVE && window.sisNearbyHome ? window.sisNearbyHome.card() : ''}
   </section>`;
 }
 
@@ -839,7 +906,7 @@ function meScreen() {
 function applyMode() {
   document.body.classList.toggle('night', S.mode === 'night');
   const gEl = document.getElementById('greet');
-  if (gEl) { const h = new Date().getHours(); const w = h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; const n = String(S.name || '').trim().split(' ')[0]; gEl.textContent = n ? `${w}, ${n}` : w; }
+  if (gEl) { const h = new Date().getHours(); const w = h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; const n = String(S.name || '').trim().split(' ')[0]; gEl.textContent = S.tab !== 'home' ? '' : n ? `${w}, ${n}` : w; }
   document.querySelector('meta[name="theme-color"]').setAttribute('content', S.mode === 'night' ? '#121022' : '#F7F5F2');
 }
 function render() {
@@ -1190,6 +1257,61 @@ function callAccept() {
     <div class="acts"><button data-act="call-end"><span class="c" style="background:#e5484d">${ic('end')}</span>End call</button></div></div>`;
   clearInterval(callT); callT = setInterval(() => { s++; const e = $('#callT'); if (e) e.textContent = mmss(s); }, 1000);
 }
+
+/* ---------------- message gestures: swipe left = reply (like Telegram), hold = menu ---------------- */
+(() => {
+  let st = null, lastHold = 0;
+  const closeMenu = () => { const m = document.getElementById('msgMenu'); if (m) m.remove(); };
+  const openMenu = (bub) => {
+    closeMenu();
+    const btns = [...bub.querySelectorAll('.tiny')]; const txt = (bub.querySelector('p') || {}).textContent || '';
+    const ph = document.getElementById('phone'); if (!btns.length || !ph) return false;
+    const menu = document.createElement('div'); menu.id = 'msgMenu'; menu.className = 'msgmenu';
+    btns.forEach((b) => {
+      const c = document.createElement('button'); c.dataset.act = b.dataset.act; if (b.dataset.who) c.dataset.who = b.dataset.who;
+      c.textContent = b.textContent; if (/^(chat-del|thread-del|reply-del)/.test(b.dataset.act)) c.className = 'danger'; menu.appendChild(c);
+    });
+    if (txt) { const cp = document.createElement('button'); cp.dataset.copy = txt; cp.textContent = 'Copy text'; const rb = menu.querySelector('[data-act^="reply-to:"]'); if (rb) rb.after(cp); else menu.prepend(cp); }
+    ph.appendChild(menu);
+    const pr = ph.getBoundingClientRect(), br = bub.getBoundingClientRect(), mw = menu.offsetWidth, mh = menu.offsetHeight;
+    let top = br.bottom - pr.top + 6; if (top + mh > pr.height - 12) top = br.top - pr.top - mh - 6;
+    menu.style.left = Math.max(12, Math.min(br.left - pr.left, pr.width - mw - 12)) + 'px';
+    menu.style.top = Math.max(12, top) + 'px';
+    return true;
+  };
+  document.addEventListener('pointerdown', (e) => {
+    const bub = e.target.closest('.bub');
+    if (!e.target.closest('#msgMenu')) closeMenu();
+    if (!bub || e.button > 0) return;
+    st = { bub, x: e.clientX, y: e.clientY, dx: 0, swipe: false, held: false };
+    st.timer = setTimeout(() => {
+      if (!st || st.swipe) return;
+      if (openMenu(bub)) { st.held = true; lastHold = Date.now(); if (navigator.vibrate) navigator.vibrate(12); }
+    }, 480);
+  });
+  document.addEventListener('pointermove', (e) => {
+    if (!st || st.held) return;
+    const dx = e.clientX - st.x, dy = e.clientY - st.y;
+    if (!st.swipe && (Math.abs(dy) > 10 || dx > 10)) { clearTimeout(st.timer); st = null; return; }
+    if (dx < -12) { st.swipe = true; clearTimeout(st.timer); st.bub.classList.add('drag'); }
+    if (st.swipe) { st.dx = dx; st.bub.style.transform = 'translateX(' + Math.max(dx, -72) + 'px)'; st.bub.style.setProperty('--sw', Math.min(1, -dx / 56)); }
+  });
+  const end = (cancel) => {
+    if (!st) return;
+    clearTimeout(st.timer);
+    const { bub, dx, swipe } = st; st = null;
+    bub.classList.remove('drag'); bub.style.transform = ''; bub.style.removeProperty('--sw');
+    if (!cancel && swipe && dx < -56) { const r = bub.querySelector('.tiny[data-act^="reply-to:"]'); if (r) r.click(); }
+  };
+  document.addEventListener('pointerup', () => end(false));
+  document.addEventListener('pointercancel', () => end(true));
+  document.addEventListener('contextmenu', (e) => { if (e.target.closest('.bub')) e.preventDefault(); });
+  document.addEventListener('click', (e) => {
+    const cp = e.target.closest('[data-copy]');
+    if (cp) { try { navigator.clipboard.writeText(cp.dataset.copy); if (typeof toast === 'function') toast('Copied'); } catch (_) {} }
+    if (Date.now() - lastHold > 450) setTimeout(closeMenu, 0);
+  });
+})();
 
 /* ---------------- actions ---------------- */
 document.addEventListener('click', async (e) => {
