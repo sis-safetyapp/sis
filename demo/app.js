@@ -317,6 +317,11 @@ function demoDb() {
         rows.sort((x, y) => (x.last_at < y.last_at ? 1 : -1));
         return { data: rows, error: null };
       }
+      if (name === 'search_people') {
+        const q = String(a.p_q || '').trim().toLowerCase(), seen = {};
+        [...T.event_members, ...T.group_members].forEach((m) => { if (m.user_id && m.user_id !== 'me' && m.name && !Object.values(seen).includes(m.name)) seen[m.user_id] = m.name; });
+        return { data: q.length < 2 ? [] : Object.entries(seen).filter(([, n]) => n.toLowerCase().includes(q)).slice(0, 10).map(([id, n]) => ({ id, name: n })), error: null };
+      }
       if (name === 'start_dm') {
         let t = T.dm_threads.find((x) => x.other === a.p_other);
         if (!t) { const nm = String(a.p_other).replace(/^u-/, '').replace(/e\d+$/, ''); t = { id: newId(), other: a.p_other, other_name: nm.charAt(0).toUpperCase() + nm.slice(1) }; T.dm_threads.push(t); }
@@ -847,9 +852,9 @@ function sisterhoodScreen() {
   } else if (seg === 'chats') {
     const mine = S.events.filter((e) => (e.event_members || []).some((x) => x.user_id === S.user.id));
     const dms = S.dms || [];
-    body = (dms.length || mine.length) ? (dms.length ? `<h3>Private chats</h3>${dms.map((d) => `<div class="card ev" data-act="dm-open:${d.id}:${d.other}:${esc(d.other_name || 'Sister')}" role="button" tabindex="0"><div>${avatar(d.other_name || 'S')}</div><div class="grow stack"><h3>${esc(d.other_name || 'Sister')}</h3><p class="small muted">${esc((d.last_body || 'Say hello').slice(0, 80))} · ${ago(d.last_at)}</p></div></div>`).join('')}` : '') +
+    body = '<button class="btn block" data-act="dm-new">' + ic('plus') + 'New chat</button>' + ((dms.length || mine.length) ? (dms.length ? `<h3>Private chats</h3>${dms.map((d) => `<div class="card ev" data-act="dm-open:${d.id}:${d.other}:${esc(d.other_name || 'Sister')}" role="button" tabindex="0"><div>${avatar(d.other_name || 'S')}</div><div class="grow stack"><h3>${esc(d.other_name || 'Sister')}</h3><p class="small muted">${esc((d.last_body || 'Say hello').slice(0, 80))} · ${ago(d.last_at)}</p></div></div>`).join('')}` : '') +
       (mine.length ? `<h3>Event chats</h3>${mine.map((e) => `<div class="card ev" data-act="event-chat:${e.id}" role="button" tabindex="0"><div class="datebox"><b>${new Date(e.starts_at).getDate()}</b><span>${new Date(e.starts_at).toLocaleDateString('en-GB', { month: 'short' })}</span></div><div class="grow stack"><h3>${esc(e.title)}</h3><p class="small muted">${eventCountLine(e)}</p></div></div>`).join('')}` : '')
-      : `<div class="empty">${ic('users')}<b>No chats yet</b><span class="small">Join an event to chat with the others going. To message one sister privately, tap Message next to her name.</span></div>`;
+      : `<div class="empty">${ic('users')}<b>No chats yet</b><span class="small">Tap New chat to message a sister privately. Event chats show up here when you join an event.</span></div>`);
   } else {
     const list = upcomingEvents();
     body = list.length ? list.map((e) => {
@@ -1262,9 +1267,9 @@ function callAccept() {
 (() => {
   let st = null, lastHold = 0;
   const closeMenu = () => { const m = document.getElementById('msgMenu'); if (m) m.remove(); };
-  const openMenu = (bub) => {
+  const openMenu = (bub, personOnly) => {
     closeMenu();
-    const btns = [...bub.querySelectorAll('.tiny')]; const txt = (bub.querySelector('p') || {}).textContent || '';
+    const btns = [...bub.querySelectorAll('.tiny')].filter((b) => !personOnly || /^(dm-start|report):/.test(b.dataset.act)); const txt = personOnly ? '' : ((bub.querySelector('p') || {}).textContent || '');
     const ph = document.getElementById('phone'); if (!btns.length || !ph) return false;
     const menu = document.createElement('div'); menu.id = 'msgMenu'; menu.className = 'msgmenu';
     btns.forEach((b) => {
@@ -1309,7 +1314,36 @@ function callAccept() {
   document.addEventListener('click', (e) => {
     const cp = e.target.closest('[data-copy]');
     if (cp) { try { navigator.clipboard.writeText(cp.dataset.copy); if (typeof toast === 'function') toast('Copied'); } catch (_) {} }
+    const who = e.target.closest('.who');
+    if (who && who.closest('.bub') && !who.closest('.bub.me')) { lastHold = Date.now(); openMenu(who.closest('.bub'), true); return; }
     if (Date.now() - lastHold > 450) setTimeout(closeMenu, 0);
+  });
+})();
+
+/* ---------------- private chats: start one with anyone ---------------- */
+const personRow = (p) => `<div class="row">${avatar(p.name)}<span class="grow">${esc(p.name)}</span><button class="btn sm" data-act="dm-start:${p.id}:${esc(p.name)}">Message</button></div>`;
+function newChatSheet() {
+  const seen = new Set(), people = [];
+  (S.members || []).forEach((m) => { if (m.user_id && m.user_id !== S.user.id && m.name && !seen.has(m.user_id)) { seen.add(m.user_id); people.push({ id: m.user_id, name: m.name }); } });
+  openSheet(`${sheetHead('New chat')}
+    <p class="small muted">Write to one sister privately. Only the two of you see it.</p>
+    ${people.length ? `<div class="stack"><b>Your circle</b>${people.map(personRow).join('')}</div>` : ''}
+    <div class="field"><label for="pSearch">Find someone by name</label><input id="pSearch" maxlength="40" placeholder="Start typing a name" autocomplete="off"></div>
+    <div id="pResults" class="stack"></div>`);
+}
+(() => {
+  let timer = null, seq = 0;
+  document.addEventListener('input', (e) => {
+    if (!e.target || e.target.id !== 'pSearch') return;
+    const q = e.target.value.trim(), box = document.getElementById('pResults'); clearTimeout(timer);
+    if (!box) return;
+    if (q.length < 2) { box.innerHTML = ''; return; }
+    timer = setTimeout(async () => {
+      const mine = ++seq;
+      const { data, error } = await sb.rpc('search_people', { p_q: q });
+      const out = document.getElementById('pResults'); if (mine !== seq || !out) return;
+      out.innerHTML = error ? '<p class="small muted">Search is not available right now.</p>' : (data || []).length ? data.map(personRow).join('') : '<p class="small muted">No one found with that name.</p>';
+    }, 300);
   });
 })();
 
@@ -1391,6 +1425,7 @@ document.addEventListener('click', async (e) => {
       case 'reply-clear': { S.reply = null; const bar = $('#replyBar'); if (bar) { bar.hidden = true; bar.innerHTML = ''; } return; }
       case 'event-chat': { const e = S.events.find((x) => x.id === arg); if (!e) return; return openChat({ kind: 'event', id: arg, title: e.title, sub: eventCountLine(e) }); }
       case 'dm-open': { const [id, other, ...nm] = arg.split(':'); return openChat({ kind: 'dm', id, other, title: nm.join(':') || 'Sister', sub: 'Private chat' }); }
+      case 'dm-new': return newChatSheet();
       case 'dm-start': {
         const [uid, ...nm] = arg.split(':'); const { data, error } = await sb.rpc('start_dm', { p_other: uid });
         if (error) return fail(error); return openChat({ kind: 'dm', id: data, other: uid, title: nm.join(':') || 'Sister', sub: 'Private chat' });
