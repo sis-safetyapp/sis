@@ -334,3 +334,7 @@ body.night .hzwalk{color:#1B1535}
 .bub{position:relative}
 .bub::after{content:'';position:absolute;left:calc(100% + 10px);top:50%;width:30px;height:30px;margin-top:-15px;border-radius:50%;background:var(--surface-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23B39BFF' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 14L4 9l5-5'/%3E%3Cpath d='M4 9h10a6 6 0 0 1 6 6v3'/%3E%3C/svg%3E") center/16px no-repeat;opacity:0;pointer-events:none}
 .bub.drag::after{opacity:var(--sw,0)}
+
+/* auto "I'm home" prompt */
+.homeask{position:absolute;left:12px;right:12px;bottom:92px;z-index:50;display:flex;flex-direction:column;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:14px 16px;box-shadow:0 12px 36px rgba(0,0,0,.45)}
+.homeask p{margin:0}

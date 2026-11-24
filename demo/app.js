@@ -514,10 +514,48 @@ function startSharing(silent) {
   keepAwake(true);
   if (!silent) toast('Finding your GPS position. Sharing begins when a location is available.', 'locate');
 }
+/* ---------------- auto "I'm home" when you reach your saved Home spot ---------------- */
+const HOME_RADIUS_M = 75;
+function checkArrivedHome(lat, lng, accuracy, speed) {
+  const me = myRow();
+  if (!me || me.status !== 'on_way' || !me.walk_deadline) { S.homeIn = null; return; }
+  if (S.homeAsk || Date.now() < (S.homeSnooze || 0)) return;
+  let home = null; try { home = JSON.parse(ls.get('home') || 'null'); } catch (e) { /* no home saved */ }
+  if (!home || !Number.isFinite(home.lat) || !Number.isFinite(home.lng)) { S.homeIn = null; return; }
+  if (!(accuracy <= 50)) return;
+  if (distM({ lat, lng }, home) > HOME_RADIUS_M || (Number.isFinite(speed) && speed > 1.5)) { S.homeIn = null; return; }
+  const now = Date.now();
+  if (!S.homeIn) S.homeIn = { t: now, n: 0 };
+  S.homeIn.n++;
+  if (S.homeIn.n >= 3 && now - S.homeIn.t >= 25000) showHomeAsk();
+}
+function showHomeAsk() {
+  const ph = document.getElementById('phone'); if (!ph || S.homeAsk) return;
+  const el = document.createElement('div'); el.id = 'homeAsk'; el.className = 'homeask';
+  let left = 30;
+  const paint = () => { el.innerHTML = `<b>Looks like you're home</b><p class="small muted">Sharing stops and your circle is told in <b>${left}</b> s.</p><div class="row"><button class="btn safe" style="flex:1" data-act="home-now">I'm home</button><button class="btn ghost" data-act="home-wait">Not yet</button></div>`; };
+  paint(); ph.appendChild(el);
+  try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) { /* no vibration */ }
+  S.homeAsk = setInterval(() => {
+    const me = myRow();
+    if (!me || me.status !== 'on_way') { closeHomeAsk(); return; }
+    left--; if (left <= 0) { arriveHome(true); return; }
+    paint();
+  }, 1000);
+}
+function closeHomeAsk() { clearInterval(S.homeAsk); S.homeAsk = null; S.homeIn = null; const el = document.getElementById('homeAsk'); if (el) el.remove(); }
+async function arriveHome(auto) {
+  closeHomeAsk();
+  if (needGroup()) return;
+  if (!await updateMe({ status: 'home', walk_deadline: null, walk_to: null, sos: false, place: null })) return;
+  stopSharing(true); render();
+  toast(auto ? "Looks like you're home. Your circle knows." : 'Home status saved to your group', 'home');
+}
 async function sendPos(pos) {
   if (S.watchId == null) return;
   const { latitude: lat, longitude: lng, accuracy } = pos.coords, now = Date.now();
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+  checkArrivedHome(lat, lng, accuracy, pos.coords.speed);
   if (S.lastSent && now - S.lastSent.t < 15000 && distM(S.lastSent, { lat, lng }) < 25) return;
   const ok = await updateMe({ lat, lng, accuracy: Math.round(accuracy), located_at: new Date().toISOString(), sharing: true });
   if (ok && S.watchId != null) S.lastSent = { t: now, lat, lng };
@@ -1368,6 +1406,8 @@ document.addEventListener('click', async (e) => {
       case 'share-link': { const v = $('#inviteLink').value; if (navigator.share) { try { await navigator.share({ title: 'Join me on Sis', text: `Join "${S.group.name}" on Sis so we can look out for each other.`, url: v }); } catch (err) { /* share cancelled */ } } else { try { await navigator.clipboard.writeText(v); toast('Link copied'); } catch (err) { $('#inviteLink').select(); } } return; }
       case 'select-group': await selectGroup(arg); S.tab = 'home'; render(); return;
       case 'leave-group': return leaveGroup(arg);
+      case 'home-now': return arriveHome(false);
+      case 'home-wait': closeHomeAsk(); S.homeSnooze = Date.now() + 10 * 60000; return;
       case 'home': if (needGroup()) return; if (!await updateMe({ status: 'home', walk_deadline: null, walk_to: null, sos: false, place: null })) return; stopSharing(true); render(); toast("Home status saved to your group", 'home'); return;
       case 'ok': if (!await updateMe({ walk_deadline: null, walk_to: null })) return; render(); toast("OK status saved to your group"); return;
       case 'add5': { const me = myRow(); const base = Math.max(Date.now(), new Date(me.walk_deadline).getTime()); if (!await updateMe({ walk_deadline: new Date(base + 5 * 60000).toISOString() })) return; render(); toast('Added 5 minutes', 'clock'); return; }
