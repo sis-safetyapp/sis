@@ -737,6 +737,22 @@ function myCardHTML() {
   return `<div class="card stack alertcard" id="walkCard"><div class="row" style="color:var(--danger)">${ic('bell')}<h2>Your group was alerted</h2></div>
       <p class="small">They can see your last location and may call you.</p><button class="btn safe block" data-act="${me.status === 'on_way' ? 'home' : 'ok'}">${ic('check')}I'm safe, tell them</button></div>`;
 }
+/* ---------------- web push: alerts even when the app is closed ---------------- */
+const VAPID_PUBLIC = (window.SIS_CONFIG || {}).vapidPublicKey || '';
+const b64uToBytes = (s) => { const raw = atob((s + '='.repeat((4 - (s.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(raw, (c) => c.charCodeAt(0)); };
+async function pushEnable() {
+  if (!LIVE || !VAPID_PUBLIC || !S.user || !('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window) || Notification.permission !== 'granted') return false;
+  try {
+    const reg = await navigator.serviceWorker.register('sw.js');
+    await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uToBytes(VAPID_PUBLIC) });
+    const j = sub.toJSON();
+    const { error } = await sb.from('push_subscriptions').upsert({ user_id: S.user.id, endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth }, { onConflict: 'endpoint' });
+    if (error) throw error;
+    return true;
+  } catch (e) { console.warn('Push setup failed:', e); return false; }
+}
 function notifyPromptHTML() {
   if (!('Notification' in window) || Notification.permission !== 'default' || !S.gid) return '';
   return `<button class="note info" data-act="notify" style="text-align:left">${ic('bell')}<span>Turn on alerts so you hear it when a sister needs you</span></button>`;
@@ -955,6 +971,7 @@ function applyMode() {
 function render() {
   if (!S.user) return;
   applyMode(); destroyMaps();
+  if (!S.pushTried) { S.pushTried = true; pushEnable(); }
   if (S.mode === 'night' && shareRule('night') && S.gid && S.watchId == null && !S.nightShared) { S.nightShared = true; startSharing(true); }
   const m = $('#main');
   m.innerHTML = S.tab === 'home' ? (homeScreen()) : S.tab === 'places' ? placesScreen() : S.tab === 'sisterhood' ? sisterhoodScreen() : meScreen();
@@ -1424,7 +1441,7 @@ document.addEventListener('click', async (e) => {
       case 'fakecall': return fakeCall();
       case 'call-accept': return callAccept();
       case 'call-end': clearInterval(callT); $('#callLayer').innerHTML = ''; return;
-      case 'notify': if ('Notification' in window && Notification.permission === 'default') { const r = await Notification.requestPermission(); toast(r === 'granted' ? 'Alerts are on' : 'Alerts stay off', r === 'granted' ? 'bell' : 'alert'); render(); } else if (!('Notification' in window)) toast('Add Sis to your home screen to get alerts', 'bell'); return;
+      case 'notify': if ('Notification' in window && Notification.permission === 'default') { const r = await Notification.requestPermission(); if (r === 'granted') await pushEnable(); toast(r === 'granted' ? 'Alerts are on' : 'Alerts stay off', r === 'granted' ? 'bell' : 'alert'); render(); } else if (!('Notification' in window)) toast('Add Sis to your home screen to get alerts', 'bell'); return;
       case 'arrived': if (needGroup()) return; return arrivedSheet();
       case 'arrived-go': { const place = $('#aPlace').value.trim() || 'Arrived safely', withLoc = $('#aLoc').checked; closeSheet(); let patch = { status: 'out', place, walk_deadline: null, walk_to: null }; if (withLoc) { const p = await locateOnce(); if (p) patch = { ...patch, ...p, located_at: new Date().toISOString() }; else toast('Could not get your location', 'alert'); } await updateMe(patch); render(); toast('Your group knows you arrived'); return; }
       case 'date': if (needGroup()) return; return dateSheet();
