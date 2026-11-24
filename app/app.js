@@ -581,11 +581,15 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && S.
 
 /* ---------------- alerts ---------------- */
 const overdue = (m) => !!(m.walk_deadline && Date.now() > new Date(m.walk_deadline).getTime() + 60000);
+function dismissedAlerts() { try { return new Set(JSON.parse(ls.get('dismissed') || '[]')); } catch (e) { return new Set(); } }
+function dismissAlert(key) { const s = dismissedAlerts(); s.add(key); ls.set('dismissed', JSON.stringify([...s].slice(-50))); }
 function alertsList() {
-  const out = [];
+  const out = [], gone = dismissedAlerts();
   for (const m of others()) {
-    if (m.sos) out.push({ kind: 'sos', key: `sos:${m.user_id}:${m.sos_at}`, m });
-    else if (overdue(m)) out.push({ kind: 'late', key: `late:${m.user_id}:${m.walk_deadline}`, m });
+    let a = null;
+    if (m.sos) a = { kind: 'sos', key: `sos:${m.user_id}:${m.sos_at}`, m };
+    else if (overdue(m) && Date.now() < new Date(m.walk_deadline).getTime() + 6 * 3600000) a = { kind: 'late', key: `late:${m.user_id}:${m.walk_deadline}`, m };
+    if (a && !gone.has(a.key)) out.push(a);
   }
   return out;
 }
@@ -625,13 +629,15 @@ function checkAlerts() {
   }
 }
 function bannersHTML() {
-  return alertsList().map(({ kind, m }) => {
-    const loc = m.lat != null ? `<a class="btn sm ${kind === 'sos' ? 'white' : ''}" href="${mapsLink(m.lat, m.lng)}" target="_blank" rel="noopener">${ic('pin')}Open her location</a>` : '<span class="small">No location shared</span>';
+  return alertsList().map(({ kind, key, m }) => {
+    const seen = m.lat != null ? `<button class="btn sm ${kind === 'sos' ? 'white' : ''}" data-act="see-member:${m.user_id}">${ic('pin')}See on map</button>` : '<span class="small">No location shared</span>';
     const call = m.phone ? `<a class="btn sm ${kind === 'sos' ? 'white' : 'ghost'}" href="tel:${esc(m.phone)}">${ic('phone')}Call ${esc(m.name)}</a>` : '';
+    const ext = m.lat != null ? `<a class="tiny" href="${mapsLink(m.lat, m.lng)}" target="_blank" rel="noopener">Open in Maps</a>` : '';
     return `<div class="banner ${kind === 'late' ? 'late' : ''}" role="alert">
       <div class="row">${ic('alert')}<b>${kind === 'sos' ? `${esc(m.name)} sent an SOS` : `${esc(m.name)} hasn't checked in`}</b></div>
       <span class="small">${kind === 'sos' ? `${ago(m.sos_at)}${m.located_at ? ' · location updated ' + ago(m.located_at) : ''}` : `Due by ${fmtTime(m.walk_deadline)}${m.walk_to ? ' · ' + esc(m.walk_to) : ''}`}</span>
-      <div class="row" style="flex-wrap:wrap">${loc}${call}</div></div>`;
+      <div class="row" style="flex-wrap:wrap">${seen}${call}</div>
+      <div class="row" style="gap:14px">${ext}<button class="tiny" data-act="alert-hide:${esc(key)}">Dismiss</button></div></div>`;
   }).join('');
 }
 
@@ -652,6 +658,7 @@ function personIcon(name, color, sos) {
   return L.divIcon({ className: '', iconSize: [0, 0], html: `<div class="mk ${sos ? 'sos' : ''}"><span class="pd" style="background:${color}">${esc(name[0]?.toUpperCase() || '?')}</span><span class="pl">${esc(name)}</span></div>` });
 }
 function updateGroupMap() {
+  if (maps.around) updateHzMap();
   const M = maps.group; if (!M) return;
   M.layer.clearLayers();
   const pts = [];
@@ -793,6 +800,7 @@ function updateHzMap() {
   M.layer.clearLayers();
   if (S.hzMe) L.circle([S.hzMe.lat, S.hzMe.lng], { radius: 300, color: '#7C4DFF', weight: 1.5, dashArray: '6 6', fillColor: '#7C4DFF', fillOpacity: 0.05, interactive: false }).addTo(M.layer);
   if (S.hzMe) L.circleMarker([S.hzMe.lat, S.hzMe.lng], { radius: 8, color: '#fff', weight: 2, fillColor: '#7C4DFF', fillOpacity: 1 }).addTo(M.layer);
+  for (const m of others()) { if (m.lat != null) L.marker([m.lat, m.lng], { icon: personIcon(m.name, colorFor(m.name), m.sos), title: m.name, interactive: false }).addTo(M.layer); }
   const hm = getHome();
   if (hm) L.marker([hm.lat, hm.lng], { icon: L.divIcon({ className: '', iconSize: [0, 0], html: `<div class="mk"><span class="pd hzpin" style="background:var(--accent)">${ic('home')}</span></div>` }), interactive: false }).addTo(M.layer);
   for (const h of hzLive()) {
@@ -1467,6 +1475,8 @@ document.addEventListener('click', async (e) => {
       case 'leave-group': return leaveGroup(arg);
       case 'home-now': return arriveHome(false);
       case 'home-wait': closeHomeAsk(); S.homeSnooze = Date.now() + 10 * 60000; return;
+      case 'alert-hide': dismissAlert(arg); { const b = $('#banners'); if (b) b.innerHTML = bannersHTML(); } return;
+      case 'see-member': { const m = S.members.find((x) => x.user_id === arg); if (!m || m.lat == null) { toast('No location shared right now', 'alert'); return; } if (S.tab !== 'home') await go('home'); const M = maps.around; if (M) { M.map.setView([m.lat, m.lng], 16); const el = $('#aroundMap'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } return; }
       case 'bug-open': {
         const d = await fetchBugs(); if (!d) return;
         S.bugFile = null; renderBugs(d, true);
