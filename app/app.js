@@ -954,12 +954,54 @@ function meScreen() {
     </div></div>
     <div class="list">
       <a class="item" href="../privacy/" target="_blank" rel="noopener"><span class="grow"><span class="t">Privacy policy</span><br><span class="s">What we keep and how to delete it</span></span></a>
+      ${LIVE ? '<button class="item" data-act="bug-open"><span class="grow"><span class="t">Tester chat</span><br><span class="s">Report a bug and share a screenshot</span></span></button>' : ''}
       <a class="item" href="https://tally.so/r/4a7DrO" target="_blank" rel="noopener"><span class="grow"><span class="t">Tell us what you think</span><br><span class="s">Short and optional, it helps us a lot</span></span></a>
       <a class="item" href="mailto:sis.safetyapp@gmail.com"><span class="grow"><span class="t">Contact us</span><br><span class="s">sis.safetyapp@gmail.com</span></span></a>
     </div>
     ${LIVE ? '<button class="btn ghost block" data-act="signout">Sign out on this device</button><button class="btn ghost block" data-act="delete-account">Delete my account and data</button>' : ''}
   </section>`;
 }
+
+/* ---------------- tester chat: bugs and screenshots (live app only) ---------------- */
+const BUG_BUCKET = 'bug-shots';
+async function fetchBugs() {
+  const r = await sb.from('bug_messages').select('*').order('created_at', { ascending: false }).limit(60);
+  if (r.error) { fail(r.error); return null; }
+  const rows = (r.data || []).reverse(), urls = {};
+  const paths = rows.map((m) => m.image_path).filter(Boolean);
+  if (paths.length) { const s = await sb.storage.from(BUG_BUCKET).createSignedUrls(paths, 3600); (s.data || []).forEach((x) => { if (x && x.signedUrl) urls[x.path] = x.signedUrl; }); }
+  S.bugRows = rows;
+  return { rows, urls };
+}
+function renderBugs(d, toEnd) {
+  const draft = $('#bugMsg') ? $('#bugMsg').value : '', keep = $('#sheet').scrollTop;
+  const list = d.rows.map((m) => {
+    const mine = m.created_by === S.user.id, u = m.image_path ? d.urls[m.image_path] : null;
+    const img = m.image_path ? (u ? `<a href="${esc(u)}" target="_blank" rel="noopener"><img class="bugimg" src="${esc(u)}" alt="Screenshot"></a>` : '<p class="small muted">Screenshot unavailable</p>') : '';
+    const act = mine ? `<button class="tiny" data-act="bug-del:${m.id}">Delete</button>` : S.admin ? `<button class="tiny" data-act="bug-del:${m.id}">Remove (moderator)</button>` : '';
+    return `<div class="bub${mine ? ' me' : ''}"><div class="who">${esc(mine ? 'You' : m.author || 'Tester')} · ${ago(m.created_at)}</div>${img}${m.body ? `<p>${esc(m.body)}</p>` : ''}${act}</div>`;
+  }).join('');
+  openSheet(`${sheetHead('Tester chat')}
+    <p class="small muted">Found a bug or something confusing? Tell us and add a screenshot. Every tester and the team can see this chat, so please hide anything private.</p>
+    <div class="chat">${list || '<p class="small muted" style="text-align:center">Nothing yet. Be the first.</p>'}</div>
+    <div class="composer"><button class="btn ghost" data-act="bug-attach" aria-label="Add a screenshot">${ic('plus')}</button><input id="bugMsg" maxlength="500" placeholder="What happened?" aria-label="Message"><button class="btn" data-act="bug-send">Send</button></div>
+    <p class="small muted" id="bugFile">${S.bugFile ? 'Screenshot added: ' + esc(S.bugFile.name) : ''}</p><input type="file" id="bugPick" accept="image/*" hidden>`);
+  const inp = $('#bugMsg'); if (inp && draft) inp.value = draft;
+  S.bugSig = d.rows.map((m) => m.id).join(',');
+  $('#sheet').scrollTop = toEnd ? $('#sheet').scrollHeight : keep;
+}
+async function shrinkImage(file) {
+  const bmp = await createImageBitmap(file);
+  const k = Math.min(1, 1280 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  return new Promise((res) => c.toBlob((b) => res(b), 'image/jpeg', 0.82));
+}
+document.addEventListener('change', (e) => {
+  if (!e.target || e.target.id !== 'bugPick') return;
+  S.bugFile = (e.target.files && e.target.files[0]) || null;
+  const f = $('#bugFile'); if (f) f.textContent = S.bugFile ? 'Screenshot added: ' + S.bugFile.name : '';
+});
 
 /* ---------------- render ---------------- */
 function applyMode() {
@@ -1425,6 +1467,38 @@ document.addEventListener('click', async (e) => {
       case 'leave-group': return leaveGroup(arg);
       case 'home-now': return arriveHome(false);
       case 'home-wait': closeHomeAsk(); S.homeSnooze = Date.now() + 10 * 60000; return;
+      case 'bug-open': {
+        const d = await fetchBugs(); if (!d) return;
+        S.bugFile = null; renderBugs(d, true);
+        clearInterval(S.chatT);
+        S.chatT = setInterval(async () => {
+          if (!$('#sheet').classList.contains('on') || !$('#bugMsg')) { clearInterval(S.chatT); return; }
+          const n = await fetchBugs(); if (n && n.rows.map((m) => m.id).join(',') !== S.bugSig) renderBugs(n);
+        }, 6000);
+        return;
+      }
+      case 'bug-attach': { const p = $('#bugPick'); if (p) p.click(); return; }
+      case 'bug-send': {
+        const inp = $('#bugMsg'), text = ((inp && inp.value) || '').trim(), file = S.bugFile;
+        if (!text && !file) return toast('Write a message or add a screenshot', 'alert');
+        let path = null;
+        if (file) {
+          let blob = null; try { blob = await shrinkImage(file); } catch (e) { /* unreadable image */ }
+          if (!blob) return toast('Could not read that image', 'alert');
+          path = `${S.user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+          const up = await sb.storage.from(BUG_BUCKET).upload(path, blob, { contentType: 'image/jpeg' }); if (up.error) return fail(up.error);
+        }
+        const { error } = await sb.from('bug_messages').insert({ author: S.name, body: text, image_path: path });
+        if (error) { if (path) sb.storage.from(BUG_BUCKET).remove([path]); return fail(error); }
+        S.bugFile = null; if (inp) inp.value = '';
+        const d = await fetchBugs(); if (d) renderBugs(d, true); return;
+      }
+      case 'bug-del': {
+        const m = (S.bugRows || []).find((x) => x.id === arg);
+        const { error } = await sb.from('bug_messages').delete().eq('id', arg); if (error) return fail(error);
+        if (m && m.image_path) sb.storage.from(BUG_BUCKET).remove([m.image_path]);
+        const d = await fetchBugs(); if (d) renderBugs(d); return;
+      }
       case 'home': if (needGroup()) return; if (!await updateMe({ status: 'home', walk_deadline: null, walk_to: null, sos: false, place: null })) return; stopSharing(true); render(); toast("Home status saved to your group", 'home'); return;
       case 'ok': if (!await updateMe({ walk_deadline: null, walk_to: null })) return; render(); toast("OK status saved to your group"); return;
       case 'add5': { const me = myRow(); const base = Math.max(Date.now(), new Date(me.walk_deadline).getTime()); if (!await updateMe({ walk_deadline: new Date(base + 5 * 60000).toISOString() })) return; render(); toast('Added 5 minutes', 'clock'); return; }
