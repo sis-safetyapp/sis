@@ -37,7 +37,7 @@ const colorFor = (s) => { let h = 0; for (const ch of String(s)) h = (h * 31 + c
 const avatar = (name, cls = '') => `<span class="av ${cls}" style="background:${colorFor(name)}">${esc((name || '?').trim()[0]?.toUpperCase() || '?')}</span>`;
 const fmtTime = (d) => d ? new Date(d).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '--:--';
 const mmss = (s) => { s = Math.max(0, Math.round(s)); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); };
-function ago(ts) { if (!ts) return ''; const m = Math.round((Date.now() - new Date(ts)) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : `${Math.round(m / 60)} h ago`; }
+function ago(ts) { if (!ts) return ''; const m = Math.round((Date.now() - new Date(ts)) / 60000); if (m < 1) return 'just now'; if (m < 60) return `${m} min ago`; const h = Math.round(m / 60); if (h < 24) return `${h} h ago`; const d = Math.floor(m / 1440); if (d === 1) return 'yesterday'; if (d < 7) return `${d} days ago`; return new Date(ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); }
 const ls = {
   get(k) { try { return localStorage.getItem('sis.' + k); } catch (e) { return null; } },
   set(k, v) { try { localStorage.setItem('sis.' + k, v); } catch (e) { /* storage blocked */ } }
@@ -77,8 +77,8 @@ function autoMode() { const n = new Date(), ss = sunTime(n, false), sr = sunTime
 /* ---------------- UI primitives ---------------- */
 let toastT;
 function toast(msg, icon = 'check') { const t = $('#toast'); t.innerHTML = ic(icon) + `<span>${esc(msg)}</span>`; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 3000); }
-function openSheet(html) { if (window.sisStopNearbyDemo) window.sisStopNearbyDemo(); $('#sheet').innerHTML = '<div class="grab"></div>' + html; $('#sheet').classList.add('on'); $('#scrim').classList.add('on'); $('#sheet').scrollTop = 0; }
-function closeSheet() { clearInterval(S.chatT); if (window.sisStopNearbyDemo) window.sisStopNearbyDemo(); $('#sheet').classList.remove('on'); $('#scrim').classList.remove('on'); S.addMode = false; }
+function openSheet(html) { if (window.sisStopNearbyDemo) window.sisStopNearbyDemo(); $('#sheet').innerHTML = '<div class="grab"></div>' + html; $('#sheet').classList.toggle('full', html.includes('class="chat"')); $('#sheet').classList.add('on'); $('#scrim').classList.add('on'); $('#sheet').scrollTop = 0; }
+function closeSheet() { clearInterval(S.chatT); const wasChat = !!S.chat; S.chat = null; if (wasChat) setTimeout(() => { try { render(); } catch (e) { /* ignore */ } }, 0); if (window.sisStopNearbyDemo) window.sisStopNearbyDemo(); $('#sheet').classList.remove('on'); $('#scrim').classList.remove('on'); S.addMode = false; }
 const sheetHead = (title) => `<div class="row between"><h2>${title}</h2><button class="btn ghost sm" data-act="close" aria-label="Close">${ic('x')}</button></div>`;
 function fail(e) { console.error(e); toast(e?.message ? `Something went wrong: ${e.message}` : 'Something went wrong. Try again.', 'alert'); }
 
@@ -899,6 +899,69 @@ function upcomingEvents() { const cut = Date.now() - 3 * 3600e3; return S.events
 function eventSpotsLeft(e) { return e.capacity ? Math.max(0, e.capacity - (e.event_members || []).length) : null; }
 function eventCountLine(e) { const n = (e.event_members || []).length, left = eventSpotsLeft(e); return `${n} going${left !== null ? ` · ${left} ${left === 1 ? 'spot' : 'spots'} left` : ''}`; }
 const STAR = (on) => `<svg viewBox="0 0 24 24" aria-hidden="true" width="20" height="20"><path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
+/* ---------------- chat list: archive, delete, full-screen chats ---------------- */
+const chatState = {
+  get() { try { return JSON.parse(ls.get('chatstate') || '{}'); } catch (e) { return {}; } },
+  set(o) { ls.set('chatstate', JSON.stringify(o)); }
+};
+function chatSt(id) { return chatState.get()[id] || {}; }
+function chatPut(id, patch) { const o = chatState.get(); o[id] = { ...(o[id] || {}), ...patch }; chatState.set(o); }
+function chatWhen(ts) {
+  const d = new Date(ts), now = new Date();
+  if (d.toDateString() === now.toDateString()) return fmtTime(d);
+  const days = (now - d) / 864e5;
+  if (days < 7) return d.toLocaleDateString('en-GB', { weekday: 'short' });
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+const BACK = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>';
+const chatHead = (title, sub, who, extra) => `<div class="chathead"><button class="btn ghost sm" data-act="close" aria-label="Back">${BACK}</button>${who ? avatar(who) : ''}<div class="grow"><b>${title}</b>${sub ? `<span class="small muted">${sub}</span>` : ''}</div>${extra || ''}</div>`;
+function chatRows() {
+  const out = [];
+  (S.dms || []).forEach((d) => {
+    const st = chatSt(d.id), at = d.last_at ? new Date(d.last_at).getTime() : 0;
+    if (st.d && at <= st.d) return;
+    out.push({ key: d.id, kind: 'dm', act: `dm-open:${d.id}:${d.other}:${esc(d.other_name || 'Sister')}`, name: d.other_name || 'Sister', preview: d.last_body || 'Say hello', at, when: at ? chatWhen(at) : '', av: avatar(d.other_name || 'S'), unread: !!at && (st.s ? at > st.s : Date.now() - at < 864e5), archived: !!(st.a && at <= st.a) });
+  });
+  S.events.filter((e) => (e.event_members || []).some((x) => x.user_id === S.user.id)).forEach((e) => {
+    const st = chatSt(e.id), t = new Date(e.starts_at);
+    out.push({ key: e.id, kind: 'event', act: `event-chat:${e.id}`, name: e.title, preview: eventCountLine(e), at: 0, when: t.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }), av: `<div class="datebox"><b>${t.getDate()}</b><span>${t.toLocaleDateString('en-GB', { month: 'short' })}</span></div>`, unread: false, archived: !!st.a });
+  });
+  return out.sort((x, y) => (y.at || 0) - (x.at || 0));
+}
+function chatRowHTML(r) {
+  return `<div class="crow" style="--w:${r.kind === 'dm' ? 168 : 84}px"><div class="cacts"><button class="ca arch" data-act="chat-arch:${r.key}">${r.archived ? 'Unarchive' : 'Archive'}</button>${r.kind === 'dm' ? `<button class="ca del" data-act="chat-del-row:${r.key}">Delete</button>` : ''}</div>
+    <div class="cmain card ev" data-act="${r.act}" role="button" tabindex="0">${r.av}<div class="grow stack"><div class="row between"><h3>${esc(r.name)}</h3><span class="small muted">${r.when}</span></div><div class="row between"><p class="small muted cprev">${esc(r.preview)}</p>${r.unread ? '<span class="dot"></span>' : ''}</div></div><button class="more" data-act="chat-more" aria-label="Chat options">&middot;&middot;&middot;</button></div></div>`;
+}
+(function () {
+  let row = null, x0 = 0, y0 = 0, dx = 0, lock = '';
+  const W = () => (row ? row.parentNode.querySelector('.cacts').offsetWidth : 0);
+  document.addEventListener('touchstart', (e) => {
+    const m = e.target.closest && e.target.closest('.cmain');
+    document.querySelectorAll('.crow.open').forEach((r) => { if (!m || r !== m.parentNode) r.classList.remove('open'); });
+    if (!m) { row = null; return; }
+    row = m; const t = e.touches[0]; x0 = t.clientX; y0 = t.clientY; dx = 0; lock = ''; row.classList.add('drag');
+  }, { passive: true });
+  document.addEventListener('touchmove', (e) => {
+    if (!row) return; const t = e.touches[0], ddx = t.clientX - x0, ddy = t.clientY - y0;
+    if (!lock && (Math.abs(ddx) > 8 || Math.abs(ddy) > 8)) lock = Math.abs(ddx) > Math.abs(ddy) ? 'x' : 'y';
+    if (lock !== 'x') return; dx = ddx;
+    const base = row.parentNode.classList.contains('open') ? -W() : 0;
+    row.style.transform = `translateX(${Math.max(-W(), Math.min(0, base + dx))}px)`;
+  }, { passive: true });
+  document.addEventListener('touchend', () => {
+    if (!row) return; row.classList.remove('drag');
+    if (lock === 'x') { const base = row.parentNode.classList.contains('open') ? -W() : 0; row.parentNode.classList.toggle('open', base + dx < -W() / 2); window.__swiped = Date.now(); }
+    row.style.transform = ''; row = null;
+  });
+  document.addEventListener('click', (e) => {
+    if (window.__swiped && Date.now() - window.__swiped < 400 && e.target.closest('.cmain')) { e.stopPropagation(); e.preventDefault(); }
+  }, true);
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || e.shiftKey || !e.target) return;
+    const btn = { chatMsg: '[data-act="chat-send"]', bugMsg: '[data-act="bug-send"]', thReply: '[data-act^="reply-send"]' }[e.target.id];
+    if (btn) { e.preventDefault(); const b = $('#sheet').querySelector(btn); if (b) b.click(); }
+  });
+})();
 function sisterhoodScreen() {
   const seg = ['threads', 'chats'].includes(S.seg) ? S.seg : 'events', pins = S.pins || new Set();
   let body;
@@ -912,11 +975,10 @@ function sisterhoodScreen() {
         <button class="star${on ? ' on' : ''}" data-act="pin:${th.id}" aria-label="${on ? 'Remove from favourites' : 'Add to favourites'}">${STAR(on)}</button></div>`;
     }).join('') : `<div class="empty">${ic('users')}<b>It is quiet here</b><span class="small">Ask something, share a tip, say hi. Everyone here is kind.</span><button class="btn sm" data-act="new-thread">${ic('plus')}Start a topic</button></div>`;
   } else if (seg === 'chats') {
-    const mine = S.events.filter((e) => (e.event_members || []).some((x) => x.user_id === S.user.id));
-    const dms = S.dms || [];
-    body = '<button class="btn block" data-act="dm-new">' + ic('plus') + 'New chat</button>' + ((dms.length || mine.length) ? (dms.length ? `<h3>Private chats</h3>${dms.map((d) => `<div class="card ev" data-act="dm-open:${d.id}:${d.other}:${esc(d.other_name || 'Sister')}" role="button" tabindex="0"><div>${avatar(d.other_name || 'S')}</div><div class="grow stack"><h3>${esc(d.other_name || 'Sister')}</h3><p class="small muted">${esc((d.last_body || 'Say hello').slice(0, 80))} · ${ago(d.last_at)}</p></div></div>`).join('')}` : '') +
-      (mine.length ? `<h3>Event chats</h3>${mine.map((e) => `<div class="card ev" data-act="event-chat:${e.id}" role="button" tabindex="0"><div class="datebox"><b>${new Date(e.starts_at).getDate()}</b><span>${new Date(e.starts_at).toLocaleDateString('en-GB', { month: 'short' })}</span></div><div class="grow stack"><h3>${esc(e.title)}</h3><p class="small muted">${eventCountLine(e)}</p></div></div>`).join('')}` : '')
-      : `<div class="empty">${ic('users')}<b>No chats yet</b><span class="small">Tap New chat to message a sister privately. Event chats show up here when you join an event.</span></div>`);
+    const rows = chatRows(), live = rows.filter((r) => !r.archived), arch = rows.filter((r) => r.archived);
+    body = '<button class="btn block" data-act="dm-new">' + ic('plus') + 'New chat</button>' +
+      (arch.length ? `<button class="item archrow" data-act="chat-arch-show"><span class="grow"><span class="t">Archived chats</span><br><span class="s">${arch.length} ${S.showArch ? '· tap to hide' : '· tap to show'}</span></span></button>${S.showArch ? arch.map(chatRowHTML).join('') : ''}` : '') +
+      (live.length ? live.map(chatRowHTML).join('') : `<div class="empty">${ic('users')}<b>No chats yet</b><span class="small">Tap New chat to message a sister privately. Event chats show up here when you join an event.</span></div>`);
   } else {
     const list = upcomingEvents();
     body = list.length ? list.map((e) => {
@@ -989,7 +1051,7 @@ function renderBugs(d, toEnd) {
     const act = mine ? `<button class="tiny" data-act="bug-del:${m.id}">Delete</button>` : S.admin ? `<button class="tiny" data-act="bug-del:${m.id}">Remove (moderator)</button>` : '';
     return `<div class="bub${mine ? ' me' : ''}"><div class="who">${esc(mine ? 'You' : m.author || 'Tester')} · ${ago(m.created_at)}</div>${img}${m.body ? `<p>${esc(m.body)}</p>` : ''}${act}</div>`;
   }).join('');
-  openSheet(`${sheetHead('Tester chat')}
+  openSheet(`${chatHead('Tester chat', 'Report a bug, add a screenshot')}
     <p class="small muted">Found a bug or something confusing? Tell us and add a screenshot. Every tester and the team can see this chat, so please hide anything private.</p>
     <div class="chat">${list || '<p class="small muted" style="text-align:center">Nothing yet. Be the first.</p>'}</div>
     <div class="composer"><button class="btn ghost" data-act="bug-attach" aria-label="Add a screenshot">${ic('plus')}</button><input id="bugMsg" maxlength="500" placeholder="What happened?" aria-label="Message"><button class="btn" data-act="bug-send">Send</button></div>
@@ -1231,7 +1293,7 @@ function threadSheet(th, replies, toEnd) {
   const list = replies.map((r) => bubble(r.author, r.body, r.created_at, r.created_by === S.user.id,
     tiny(`reply-to:${r.id}`, 'Reply', r.author) + (r.created_by === S.user.id ? tiny(`reply-del:${r.id}:${th.id}`, 'Delete') : tiny(`report:reply:${r.id}`, 'Report') + tiny(`dm-start:${r.created_by}:${r.author}`, 'Message') + mod('reply', r.id)),
     r.reply_to && byId[r.reply_to] ? `<div class="quote">${esc(byId[r.reply_to].author)}: ${esc(byId[r.reply_to].body.slice(0, 80))}</div>` : '')).join('');
-  openSheet(`${sheetHead(esc(th.title))}
+  openSheet(`${chatHead(esc(th.title), '', th.author)}
     <div class="chat">${first}${list || '<p class="small muted" style="text-align:center">No replies yet. Be the first.</p>'}</div>
     ${replyBarHTML()}
     <div class="composer"><input id="thReply" maxlength="500" placeholder="Write a reply…" aria-label="Your reply"><button class="btn" data-act="reply-send:${th.id}">Send</button></div>
@@ -1248,10 +1310,11 @@ async function fetchChat(c) {
   const r = c.kind === 'dm' ? await sb.from('dm_messages').select('*').eq('dm_id', c.id).order('created_at').limit(300)
     : await sb.from('event_messages').select('*').eq('event_id', c.id).order('created_at').limit(300);
   if (r.error) { fail(r.error); return null; }
-  return r.data || [];
+  const cut = chatSt(c.id).d, data = r.data || [];
+  return cut ? data.filter((m) => new Date(m.created_at).getTime() > cut) : data;
 }
 function renderChat(msgs, toEnd) {
-  const c = S.chat; c.n = msgs.length;
+  const c = S.chat; c.n = msgs.length; chatPut(c.id, { s: Date.now() });
   const byId = Object.fromEntries(msgs.map((m) => [m.id, m]));
   const tiny = (act, label, who) => `<button class="tiny" data-act="${act}"${who ? ` data-who="${esc(who)}"` : ''}>${label}</button>`;
   const list = msgs.map((m) => {
@@ -1263,9 +1326,7 @@ function renderChat(msgs, toEnd) {
     return `<div class="bub${mine ? ' me' : ''}"><div class="who">${esc(who)} · ${ago(m.created_at)}</div>${q}<p>${esc(m.body)}</p>${acts}</div>`;
   }).join('');
   const draft = $('#chatMsg') ? $('#chatMsg').value : '';
-  openSheet(`${sheetHead(esc(c.title))}
-    ${c.sub ? `<p class="small muted">${esc(c.sub)}</p>` : ''}
-    ${c.kind === 'dm' ? `<div class="row"><button class="btn ghost sm" data-act="dm-block:${c.other}">Block</button></div>` : ''}
+  openSheet(`${chatHead(esc(c.title), esc(c.sub || ''), c.kind === 'dm' ? c.title : '', c.kind === 'dm' ? `<button class="btn ghost sm" data-act="dm-block:${c.other}">Block</button>` : '')}
     <div class="chat">${list || '<p class="small muted" style="text-align:center">No messages yet. Say hello.</p>'}</div>
     ${replyBarHTML()}
     <div class="composer"><input id="chatMsg" maxlength="1000" placeholder="Write a message…" aria-label="Your message"><button class="btn" data-act="chat-send">Send</button></div>
@@ -1587,6 +1648,10 @@ document.addEventListener('click', async (e) => {
         const msgs = await fetchChat(c); if (msgs) renderChat(msgs); return;
       }
       case 'hz-fold': { const bar = el.closest('.hzbar'); bar.classList.toggle('col'); ls.set('hzcol', bar.classList.contains('col') ? '1' : '0'); return; }
+      case 'chat-more': { const r = el.closest('.crow'), was = r.classList.contains('open'); document.querySelectorAll('.crow.open').forEach((x) => x.classList.remove('open')); if (!was) r.classList.add('open'); return; }
+      case 'chat-arch': { const was = chatSt(arg).a; chatPut(arg, { a: was ? null : Date.now() }); render(); toast(was ? 'Moved back to chats' : 'Archived. A new message brings it back.', 'check'); return; }
+      case 'chat-del-row': { if (!el.dataset.sure) { el.dataset.sure = '1'; el.textContent = 'Sure?'; return; } chatPut(arg, { d: Date.now(), a: null }); render(); toast('Chat deleted for you', 'check'); return; }
+      case 'chat-arch-show': S.showArch = !S.showArch; return render();
       case 'home-set': closeSheet(); return go('me');
       case 'home-here': { const p = await locateOnce(); if (!p) return toast('Could not get your location. Check Location settings.', 'alert'); ls.set('home', JSON.stringify({ lat: p.lat, lng: p.lng })); render(); toast('Home saved on this phone only', 'home'); return; }
       case 'home-pick': S.homePick = true; await go('home'); toast('Tap the map where your home is', 'pin'); return;
