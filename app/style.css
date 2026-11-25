@@ -362,3 +362,7 @@ body.night .hzwalk{color:#1B1535}
 .cprev{margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);flex:none}
 .archrow{margin-bottom:8px}
+
+/* pin button, narrower swipe actions */
+.ca{width:72px}
+.ca.pin{background:#5a7fc2}

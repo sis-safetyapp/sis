@@ -926,15 +926,20 @@ function chatRows() {
     const st = chatSt(e.id), t = new Date(e.starts_at);
     out.push({ key: e.id, kind: 'event', act: `event-chat:${e.id}`, name: e.title, preview: eventCountLine(e), at: 0, when: t.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }), av: `<div class="datebox"><b>${t.getDate()}</b><span>${t.toLocaleDateString('en-GB', { month: 'short' })}</span></div>`, unread: false, archived: !!st.a });
   });
-  return out.sort((x, y) => (y.at || 0) - (x.at || 0));
+  if (LIVE) out.push({ key: 'tester', kind: 'tester', act: 'bug-open', name: 'Tester chat', preview: 'Report a bug or share a screenshot', at: 0, when: '', av: avatar('Tester'), unread: false, archived: false, top: true });
+  out.forEach((r) => { r.pinned = r.kind === 'tester' || !!chatSt(r.key).p; });
+  return out.sort((x, y) => (y.top ? 1 : 0) - (x.top ? 1 : 0) || (y.pinned ? 1 : 0) - (x.pinned ? 1 : 0) || (y.at || 0) - (x.at || 0));
 }
+const PINSVG = '<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true" style="vertical-align:-1px"><path d="M16 3l5 5-2 1-3 3 1 5-1 1-4-4-5 5-1-1 5-5-4-4 1-1 5 1 3-3z"/></svg>';
 function chatRowHTML(r) {
-  return `<div class="crow" style="--w:${r.kind === 'dm' ? 168 : 84}px"><div class="cacts"><button class="ca arch" data-act="chat-arch:${r.key}">${r.archived ? 'Unarchive' : 'Archive'}</button>${r.kind === 'dm' ? `<button class="ca del" data-act="chat-del-row:${r.key}">Delete</button>` : ''}</div>
-    <div class="cmain card ev" data-act="${r.act}" role="button" tabindex="0">${r.av}<div class="grow stack"><div class="row between"><h3>${esc(r.name)}</h3><span class="small muted">${r.when}</span></div><div class="row between"><p class="small muted cprev">${esc(r.preview)}</p>${r.unread ? '<span class="dot"></span>' : ''}</div></div><button class="more" data-act="chat-more" aria-label="Chat options">&middot;&middot;&middot;</button></div></div>`;
+  const tester = r.kind === 'tester', n = tester ? 0 : (r.kind === 'dm' ? 3 : 2);
+  const acts = tester ? '' : `<div class="cacts"><button class="ca pin" data-act="chat-pin:${r.key}">${r.pinned ? 'Unpin' : 'Pin'}</button><button class="ca arch" data-act="chat-arch:${r.key}">${r.archived ? 'Unarchive' : 'Archive'}</button>${r.kind === 'dm' ? `<button class="ca del" data-act="chat-del-row:${r.key}">Delete</button>` : ''}</div>`;
+  return `<div class="crow" style="--w:${n * 72}px">${acts}
+    <div class="cmain card ev" data-act="${r.act}" role="button" tabindex="0">${r.av}<div class="grow stack"><div class="row between"><h3>${esc(r.name)}</h3><span class="small muted">${r.pinned ? PINSVG + ' ' : ''}${r.when}</span></div><div class="row between"><p class="small muted cprev">${esc(r.preview)}</p>${r.unread ? '<span class="dot"></span>' : ''}</div></div>${tester ? '' : '<button class="more" data-act="chat-more" aria-label="Chat options">&middot;&middot;&middot;</button>'}</div></div>`;
 }
 (function () {
   let row = null, x0 = 0, y0 = 0, dx = 0, lock = '';
-  const W = () => (row ? row.parentNode.querySelector('.cacts').offsetWidth : 0);
+  const W = () => { const a = row && row.parentNode.querySelector('.cacts'); return a ? a.offsetWidth : 0; };
   document.addEventListener('touchstart', (e) => {
     const m = e.target.closest && e.target.closest('.cmain');
     document.querySelectorAll('.crow.open').forEach((r) => { if (!m || r !== m.parentNode) r.classList.remove('open'); });
@@ -985,6 +990,26 @@ function pastEventsHTML() {
   return `<button class="item archrow" data-act="past-show"><span class="grow"><span class="t">Past events</span><br><span class="s">${past.length} ${S.showPast ? '· tap to hide' : '· tap to show'}</span></span></button>` +
     (S.showPast ? past.map((e) => { const d = new Date(e.starts_at); return `<div class="card ev" data-act="event-open:${e.id}" role="button" tabindex="0" style="opacity:.75"><div class="datebox"><b>${d.getDate()}</b><span>${d.toLocaleDateString('en-GB', { month: 'short' })}</span></div><div class="grow stack"><h3>${esc(e.title)}</h3><p class="small muted">${e.place ? esc(e.place) : 'Past event'}</p></div></div>`; }).join('') : '');
 }
+/* swipe right to close a full-screen chat */
+(function () {
+  let on = false, x0 = 0, y0 = 0, dx = 0, lock = '';
+  const sh = () => $('#sheet');
+  document.addEventListener('touchstart', (e) => {
+    const s = sh(); on = !!(s && s.classList.contains('on') && s.classList.contains('full') && e.target.closest && e.target.closest('#sheet') && !e.target.closest('input,textarea'));
+    if (!on) return; const t = e.touches[0]; x0 = t.clientX; y0 = t.clientY; dx = 0; lock = '';
+  }, { passive: true });
+  document.addEventListener('touchmove', (e) => {
+    if (!on) return; const t = e.touches[0], ddx = t.clientX - x0, ddy = t.clientY - y0;
+    if (!lock && (Math.abs(ddx) > 10 || Math.abs(ddy) > 10)) lock = (ddx > 0 && Math.abs(ddx) > Math.abs(ddy) * 1.5) ? 'x' : 'y';
+    if (lock !== 'x') return; dx = Math.max(0, ddx);
+    const s = sh(); s.style.transition = 'none'; s.style.transform = `translateX(${dx}px)`;
+  }, { passive: true });
+  document.addEventListener('touchend', () => {
+    if (!on) return; on = false; const s = sh(); if (!s) return;
+    s.style.transition = ''; s.style.transform = '';
+    if (lock === 'x' && dx > 90) closeSheet();
+  });
+})();
 function sisterhoodScreen() {
   const seg = ['threads', 'chats'].includes(S.seg) ? S.seg : 'events', pins = S.pins || new Set();
   let body;
@@ -1673,8 +1698,9 @@ document.addEventListener('click', async (e) => {
       }
       case 'hz-fold': { const bar = el.closest('.hzbar'); bar.classList.toggle('col'); ls.set('hzcol', bar.classList.contains('col') ? '1' : '0'); return; }
       case 'chat-more': { const r = el.closest('.crow'), was = r.classList.contains('open'); document.querySelectorAll('.crow.open').forEach((x) => x.classList.remove('open')); if (!was) r.classList.add('open'); return; }
-      case 'chat-arch': { const was = chatSt(arg).a; chatPut(arg, { a: was ? null : Date.now() }); render(); toast(was ? 'Moved back to chats' : 'Archived. A new message brings it back.', 'check'); return; }
+      case 'chat-arch': { const was = chatSt(arg).a; chatPut(arg, { a: was ? null : Date.now(), p: null }); render(); toast(was ? 'Moved back to chats' : 'Archived. A new message brings it back.', 'check'); return; }
       case 'chat-del-row': { if (!el.dataset.sure) { el.dataset.sure = '1'; el.textContent = 'Sure?'; return; } chatPut(arg, { d: Date.now(), a: null }); render(); toast('Chat deleted for you', 'check'); return; }
+      case 'chat-pin': { const on = !chatSt(arg).p; chatPut(arg, { p: on ? Date.now() : null, a: null }); render(); toast(on ? 'Pinned to the top' : 'Unpinned', 'check'); return; }
       case 'chat-arch-show': S.showArch = !S.showArch; return render();
       case 'past-show': S.showPast = !S.showPast; return render();
       case 'phone-ask-save': {
