@@ -80,7 +80,11 @@ function toast(msg, icon = 'check') { const t = $('#toast'); t.innerHTML = ic(ic
 function openSheet(html) { if (window.sisStopNearbyDemo) window.sisStopNearbyDemo(); $('#sheet').innerHTML = '<div class="grab"></div>' + html; $('#sheet').classList.toggle('full', html.includes('class="chat"')); $('#sheet').classList.add('on'); $('#scrim').classList.add('on'); $('#sheet').scrollTop = 0; }
 function closeSheet() { clearInterval(S.chatT); const wasChat = !!S.chat; S.chat = null; if (wasChat) setTimeout(() => { try { render(); } catch (e) { /* ignore */ } }, 0); if (window.sisStopNearbyDemo) window.sisStopNearbyDemo(); $('#sheet').classList.remove('on'); $('#scrim').classList.remove('on'); S.addMode = false; }
 const sheetHead = (title) => `<div class="row between"><h2>${title}</h2><button class="btn ghost sm" data-act="close" aria-label="Close">${ic('x')}</button></div>`;
-function fail(e) { console.error(e); toast(e?.message ? `Something went wrong: ${e.message}` : 'Something went wrong. Try again.', 'alert'); }
+function fail(e) {
+  console.error(e);
+  if (e && e.code === '23503' && /profiles_id_fkey/.test(e.message || '')) { toast('Your sign-in is out of date. Signing you out.', 'alert'); sb.auth.signOut().finally(() => setTimeout(() => location.reload(), 1200)); return; }
+  toast('Something went wrong. Please try again, or write to us at sis.safetyapp@gmail.com', 'alert');
+}
 
 /* ---------------- demo data: opens without sign-up (add ?live=1 for the real database) ---------------- */
 // config.js mode: 'demo' (the public demo, never signs in) or 'live' (the tester app with Google sign-in).
@@ -351,9 +355,11 @@ async function init() {
   }
   if (!CFG.supabaseUrl || !CFG.supabaseAnonKey || !window.supabase) return renderSetup();
   sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, { auth: { persistSession: true, autoRefreshToken: true } });
+  const authErr = new URLSearchParams(location.hash.replace(/^#/, '') + '&' + location.search.slice(1)).get('error_description');
+  if (authErr) history.replaceState(null, '', `${location.pathname}?live=1`);
   try {
     const { data: { session } } = await sb.auth.getSession();
-    if (!session) return renderWelcome();
+    if (!session) { renderWelcome(); if (authErr) toast('This beta is invite-only right now. Write to us at sis.safetyapp@gmail.com to get access.', 'alert'); return; }
     await afterAuth(session.user);
   } catch (e) { fail(e); renderWelcome(); }
 }
