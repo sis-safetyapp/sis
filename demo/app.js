@@ -150,7 +150,7 @@ function demoDb() {
       { id: 'th2', created_by: 'u-liis', author: 'Liis', title: 'New in Tallinn: where do you meet people?', body: null, created_at: iso(-3000), last_reply_at: iso(-2600) }
     ],
     thread_replies: [
-      { id: 'tr1', thread_id: 'th1', created_by: 'u-maria', author: 'Maria', body: 'I share my ride with my group and text when I am home.', created_at: iso(-900) },
+      { id: 'tr1', thread_id: 'th1', created_by: 'u-maria', author: 'Maria', body: 'I share my ride with my circle and text when I am home.', created_at: iso(-900) },
       { id: 'tr2', thread_id: 'th1', created_by: 'u-sofia', author: 'Sofia', body: 'Walk me home with a friend on the phone works for me.', created_at: iso(-200) },
       { id: 'tr3', thread_id: 'th2', created_by: 'u-kati', author: 'Kati', body: 'The Sunday walk in Kadriorg is a good start.', created_at: iso(-2600) }
     ],
@@ -377,7 +377,7 @@ function renderWelcome(user) {
   $('#tabs').hidden = true;
   const head = `<div class="logo-big">${LOGO(120, 86)}</div>
     <div class="stack"><p class="eyebrow">Sis · beta</p><h1>Step out bravely, with people you trust</h1>
-    <p class="muted">Check in on each other, pick places other women rate as safe, and find your circle. Day and night.</p></div>`;
+    <p class="muted">Check in on each other, pick places other women rate as safe, and find your circle.</p></div>`;
   const beta = `<div class="note info">${ic('shieldok')}<span>This is a test version. sis. is not an emergency service: if you are in danger, call 112.</span></div><p class="small muted">By continuing you agree to our <a href="../privacy/" target="_blank" rel="noopener">privacy policy</a>.</p>`;
   if (!user) {
     $('#main').innerHTML = `<section class="screen" style="padding-top:12px">${head}
@@ -483,7 +483,7 @@ async function leaveGroup(id) {
   if (error) return fail(error);
   S.groups = S.groups.filter((g) => g.id !== id);
   if (id === S.gid) await selectGroup(S.groups[0]?.id || null);
-  render(); toast('You left the group');
+  render(); toast('You left the circle');
 }
 async function updateMe(patch) {
   if (!S.gid || !S.user) return false;
@@ -494,7 +494,7 @@ async function updateMe(patch) {
       .eq('group_id', gid).eq('user_id', uid)
       .select('user_id').maybeSingle();
     if (error) throw error;
-    if (!data) throw new Error('Could not update your group status. Rejoin and try again.');
+    if (!data) throw new Error('Could not update your circle status. Rejoin and try again.');
     if (gid === S.gid) {
       const me = myRow();
       if (me) Object.assign(me, patch);
@@ -555,7 +555,7 @@ async function arriveHome(auto) {
   if (needGroup()) return;
   if (!await updateMe({ status: 'home', walk_deadline: null, walk_to: null, sos: false, place: null })) return;
   stopSharing(true); render();
-  toast(auto ? "Looks like you're home. Your circle knows." : 'Home status saved to your group', 'home');
+  toast(auto ? "Looks like you're home. Your circle knows." : 'Home status saved to your circle', 'home');
 }
 async function sendPos(pos) {
   if (S.watchId == null) return;
@@ -621,7 +621,7 @@ function checkAlerts() {
     const nativeSos = nightSos && freshSos &&
       window.SisNativeNotifications && typeof window.SisNativeNotifications.groupSos === 'function';
     if (nativeSos) {
-      try { window.SisNativeNotifications.groupSos(a.m.name || 'A group member'); }
+      try { window.SisNativeNotifications.groupSos(a.m.name || 'A circle member'); }
       catch (e) { console.warn('Native SOS notification failed:', e); beep(); }
     } else if (a.kind !== 'sos' || nightSos) {
       beep();
@@ -719,13 +719,13 @@ function membersHTML() {
 }
 function groupCardHTML(withMap) {
   if (!S.group) return `<div class="card stack"><div class="row">${ic('users')}<h2>Your circle of trust</h2></div>
-    <p class="small muted">Create a group for tonight or for your closest friends. They join with a code and see each other's check-ins.</p>
+    <p class="small muted">Create a circle for an evening or for your closest friends. They join with a code and see each other's check-ins.</p>
     <div class="row"><button class="btn" style="flex:1" data-act="group-new">${ic('plus')}Create</button><button class="btn ghost" style="flex:1" data-act="group-join">Join with code</button></div></div>`;
   const ended = groupEnded();
   return `<div class="card stack">
-    <div class="row between"><div class="grow"><p class="eyebrow">${S.group.ends_at ? (ended ? 'Ended' : 'Night out · ends ' + fmtTime(S.group.ends_at)) : 'Circle of trust'}</p><h2>${esc(S.group.name)}</h2></div>
+    <div class="row between"><div class="grow"><p class="eyebrow">${S.group.ends_at ? (ended ? 'Ended' : 'Temporary circle · ends ' + fmtTime(S.group.ends_at)) : 'Circle of trust'}</p><h2>${esc(S.group.name)}</h2></div>
       <button class="btn sm ghost" data-act="invite">${ic('link')}Invite</button></div>
-    ${ended ? `<p class="small muted">This night out has ended and location sharing is off.</p><button class="btn ghost" data-act="group-new">${ic('plus')}Start a new one</button>` : ''}
+    ${ended ? `<p class="small muted">This circle has ended and location sharing is off.</p><button class="btn ghost" data-act="group-new">${ic('plus')}Start a new one</button>` : ''}
     ${withMap ? '<div class="map" id="groupMap"></div>' : ''}
     <div class="list" id="memberList" style="box-shadow:none">${membersHTML()}</div>
     ${S.groups.length > 1 ? `<button class="link" style="align-self:flex-start" data-act="tab:me">Switch group</button>` : ''}
@@ -745,9 +745,9 @@ function myCardHTML() {
       <div class="row"><button class="btn safe" style="flex:1" data-act="${me.status === 'on_way' ? 'home' : 'ok'}">${ic('check')}${me.status === 'on_way' ? "I'm home" : "I'm OK"}</button><button class="btn ghost" data-act="add5">+5 min</button></div></div>`;
   }
   if (now < dl + 60000) return `<div class="card stack alertcard" id="walkCard"><div class="row" style="color:var(--danger)">${ic('alert')}<h2>Are you OK, ${esc(S.name)}?</h2></div>
-      <p>Confirm you're safe or your group gets an alert in <b id="confirmTime">${mmss((dl + 60000 - now) / 1000)}</b>.</p>
+      <p>Confirm you're safe or your circle gets an alert in <b id="confirmTime">${mmss((dl + 60000 - now) / 1000)}</b>.</p>
       <div class="row"><button class="btn safe" style="flex:1" data-act="${me.status === 'on_way' ? 'home' : 'ok'}">${ic('check')}I'm OK</button><button class="btn ghost" data-act="add5">5 more min</button></div></div>`;
-  return `<div class="card stack alertcard" id="walkCard"><div class="row" style="color:var(--danger)">${ic('bell')}<h2>Your group was alerted</h2></div>
+  return `<div class="card stack alertcard" id="walkCard"><div class="row" style="color:var(--danger)">${ic('bell')}<h2>Your circle was alerted</h2></div>
       <p class="small">They can see your last location and may call you.</p><button class="btn safe block" data-act="${me.status === 'on_way' ? 'home' : 'ok'}">${ic('check')}I'm safe, tell them</button></div>`;
 }
 /* ---------------- web push: alerts even when the app is closed ---------------- */
@@ -1049,14 +1049,14 @@ function sisterhoodScreen() {
   if (seg === 'events') body += pastEventsHTML();
   const act = seg === 'threads' ? ['new-thread', 'Topic'] : seg === 'events' ? ['new-event:meetup', 'Event'] : null;
   return `<section class="screen">
-    <div><h1>Community</h1><p class="muted" style="margin-top:4px">Meet other women in person, or just talk.</p></div>
+    <div><h1>Community</h1><p class="muted" style="margin-top:4px">Talk, ask, share. Meet up only if you want to.</p></div>
     <div class="seg">${[['events', 'Events'], ['threads', 'Topics'], ['chats', 'Chats']].map(([k, l]) => `<button class="${seg === k ? 'on' : ''}" data-act="seg:${k}">${l}</button>`).join('')}</div>
     <div class="stack">${body}</div>${act ? `<button class="fab" data-act="${act[0]}" aria-label="${act[1]}">${ic('plus')}</button>` : ''}</section>`;
 }
 
 const SHARE_RULES = [
   { k: 'trips', t: 'During Walk me home and rides', s: 'Starts with the timer, stops when you check in', on: true },
-  { k: 'night', t: 'Every night after sunset', s: 'Turns on by itself in night mode', on: false },
+  { k: 'night', t: 'Share my location after dark', s: 'Turns on by itself when the dark theme starts', on: false },
   { k: 'sos', t: 'When I send an SOS', s: 'Your circle sees where you are', locked: true }
 ];
 function shareRule(k) { const r = SHARE_RULES.find((x) => x.k === k); if (!r) return false; if (r.locked) return true; const v = ls.get('share.' + k); return v == null ? r.on : v === '1'; }
@@ -1064,15 +1064,15 @@ function meScreen() {
   const notif = 'Notification' in window ? Notification.permission : 'unsupported';
   return `<section class="screen">
     <div class="row">${avatar(S.name)}<div class="grow"><h1 style="font-size:26px">${esc(S.name)}</h1><p class="small muted">${esc(S.phone || 'No phone added')}</p>${LIVE && S.user && S.user.email ? `<p class="small muted">${esc(S.user.email)}</p>` : ''}</div><button class="btn sm ghost" data-act="edit-profile">Edit</button></div>
-    <div class="stack"><div class="sec-head"><h2>My groups</h2><div class="row"><button class="link" data-act="group-join">Join</button><button class="link" data-act="group-new">+ New</button></div></div>
+    <div class="stack"><div class="sec-head"><h2>My circles</h2><div class="row"><button class="link" data-act="group-join">Join</button><button class="link" data-act="group-new">+ New</button></div></div>
       ${S.groups.length ? `<div class="list">${S.groups.map((g) => `<div class="item"><button class="grow" style="text-align:left" data-act="select-group:${g.id}"><span class="t">${esc(g.name)}</span><br><span class="s">Code ${esc(g.code)}${g.ends_at ? ' · ends ' + new Date(g.ends_at).toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</span></button>
-        ${g.id === S.gid ? `<span class="pill acc">Active</span>` : ''}<button class="btn sm ghost" data-act="leave-group:${g.id}">Leave</button></div>`).join('')}</div>` : '<p class="muted small">No groups yet.</p>'}</div>
+        ${g.id === S.gid ? `<span class="pill acc">Active</span>` : ''}<button class="btn sm ghost" data-act="leave-group:${g.id}">Leave</button></div>`).join('')}</div>` : '<p class="muted small">No circles yet.</p>'}</div>
     <div class="stack"><h2>Location sharing</h2><div class="list">
-      <button class="item" data-act="share"><span class="grow"><span class="t">Share my location now</span><br><span class="s">${S.group ? 'Only your circle can see it' : 'Join a group first'}</span></span><span class="toggle ${S.watchId != null || myRow()?.sharing ? 'on' : ''}" role="switch" aria-checked="${S.watchId != null || !!myRow()?.sharing}"></span></button>
+      <button class="item" data-act="share"><span class="grow"><span class="t">Share my location now</span><br><span class="s">${S.group ? 'Only your circle can see it' : 'Join a circle first'}</span></span><span class="toggle ${S.watchId != null || myRow()?.sharing ? 'on' : ''}" role="switch" aria-checked="${S.watchId != null || !!myRow()?.sharing}"></span></button>
       ${SHARE_RULES.map((r) => `<button class="item" data-act="${r.locked ? 'noop' : 'share-rule:' + r.k}"><span class="grow"><span class="t">${r.t}</span><br><span class="s">${r.s}</span></span>${r.locked ? `<span class="pill safe">${ic('check')}Always</span>` : `<span class="toggle ${shareRule(r.k) ? 'on' : ''}" role="switch" aria-checked="${shareRule(r.k)}"></span>`}</button>`).join('')}
     </div><p class="small muted">${ic('lock')} Sharing stops when you tap "I'm home" and your location is deleted.</p></div>
     <div class="stack"><h2>Settings</h2><div class="list">
-      <button class="item" data-act="toggle-auto"><span class="grow"><span class="t">Night mode at sunset</span><br><span class="s">Switches on by itself after dark</span></span><span class="toggle ${S.auto ? 'on' : ''}" role="switch" aria-checked="${S.auto}"></span></button>
+      <button class="item" data-act="toggle-auto"><span class="grow"><span class="t">Dark theme at sunset</span><br><span class="s">Switches on by itself after dark</span></span><span class="toggle ${S.auto ? 'on' : ''}" role="switch" aria-checked="${S.auto}"></span></button>
       <div class="item"><span class="grow"><span class="t">Theme</span><br><span class="s">${S.auto ? 'Following sunset' : S.mode === 'night' ? 'Dark, set by you' : 'Light, set by you'}</span></span><span class="row"><button class="btn ghost sm" data-act="mode:day">Light</button><button class="btn ghost sm" data-act="mode:night">Dark</button></span></div>
       <div class="item"><span class="grow"><span class="t">Home</span><br><span class="s">${getHome() ? 'Saved on this phone only' : 'Suggests your walking time. Stays on this phone.'}</span></span><span class="row"><button class="btn ghost sm" data-act="home-here">I'm here</button><button class="btn ghost sm" data-act="home-pick">On map</button>${getHome() ? '<button class="btn ghost sm" data-act="home-clear">Clear</button>' : ''}</span></div>
       <button class="item" data-act="notify"><span class="grow"><span class="t">Alerts</span><br><span class="s">${notif === 'granted' ? 'On. You get a notification while Sis is open.' : notif === 'denied' ? 'Blocked in browser settings.' : notif === 'unsupported' ? 'Not supported in this browser. Add Sis to your home screen.' : 'Tap to turn on.'}</span></span>${notif === 'granted' ? `<span class="pill safe">${ic('check')}On</span>` : ''}</button>
@@ -1204,20 +1204,20 @@ async function loadSisterhood() {
 /* ---------------- sheets ---------------- */
 function groupSheet() {
   openSheet(`${sheetHead('Your circle of trust')}
-    <p class="small muted">Check-ins, walks home and SOS go to the people in your active group.</p>
-    <button class="btn block" data-act="group-new">${ic('plus')}Create a group</button>
+    <p class="small muted">Check-ins, walks home and SOS go to the people in your active circle.</p>
+    <button class="btn block" data-act="group-new">${ic('plus')}Create a circle</button>
     <button class="btn ghost block" data-act="group-join">Join with a code</button>`);
 }
 function newGroupSheet() {
-  openSheet(`${sheetHead('Create a group')}
-    <div class="field"><label for="gName">Name</label><input id="gName" maxlength="60" value="${esc(S.mode === 'night' ? 'Friday night out' : 'My sisters')}"></div>
+  openSheet(`${sheetHead('Create a circle')}
+    <div class="field"><label for="gName">Name</label><input id="gName" maxlength="60" value="${esc(S.mode === 'night' ? 'Friday plans' : 'My sisters')}"></div>
     <div class="field"><span class="lab">How long?</span><div class="pick" id="gHours">
-      <button data-act="pick-one" data-v="8">Tonight (8 h)</button><button data-act="pick-one" data-v="24">24 hours</button><button class="on" data-act="pick-one" data-v="">Keep it (trusted circle)</button></div></div>
-    <p class="small muted">A night out ends by itself, and location sharing stops with it.</p>
+      <button data-act="pick-one" data-v="8">This evening (8 hours)</button><button data-act="pick-one" data-v="24">One day</button><button class="on" data-act="pick-one" data-v="">Keep it (my close circle)</button></div></div>
+    <p class="small muted">A temporary circle ends by itself, and location sharing stops with it.</p>
     <button class="btn block" data-act="group-create">${ic('users')}Create and invite</button>`);
 }
 function joinSheet() {
-  openSheet(`${sheetHead('Join a group')}
+  openSheet(`${sheetHead('Join a circle')}
     <div class="field"><label for="jCode">Invite code</label><input id="jCode" maxlength="6" autocapitalize="characters" placeholder="e.g. 7F3A9C" style="text-transform:uppercase;letter-spacing:.15em;font-weight:700"></div>
     <button class="btn block" data-act="group-join-go">Join</button>`);
 }
@@ -1242,7 +1242,7 @@ function walkSheet() {
     : getHome() ? '<p class="small muted">Tap the target button on the map first and I will suggest the time.</p>'
     : `<button class="btn ghost sm" data-act="home-set">${ic('home')}Set your home to get a time suggestion</button>`;
   openSheet(`${sheetHead('Walk me home')}
-    <p class="small muted">Your group sees your live location until you tap "I'm home". If you don't check in on time, Sis asks if you're OK, then alerts them.</p>
+    <p class="small muted">Your circle sees your live location until you tap "I'm home". If you don't check in on time, Sis asks if you're OK, then alerts them.</p>
     <div class="field"><label for="wTo">Going to</label><input id="wTo" maxlength="80" value="Home"></div>
     ${hint}
     <div class="field"><span class="lab">How long will it take?</span><div class="pick" id="wMin">${opts.map((m) => `<button class="${m === def ? 'on' : ''}" data-act="pick-one" data-v="${m}">${m} min</button>`).join('')}</div></div>
@@ -1252,12 +1252,12 @@ function arrivedSheet() {
   openSheet(`${sheetHead("I've arrived")}
     <div class="field"><label for="aPlace">Where are you?</label><input id="aPlace" maxlength="100" placeholder="e.g. Office, Rotermann"></div>
     <label class="row small"><input type="checkbox" id="aLoc" checked> Share my location once</label>
-    <button class="btn safe block" data-act="arrived-go">${ic('check')}Tell my group</button>`);
+    <button class="btn safe block" data-act="arrived-go">${ic('check')}Tell my circle</button>`);
 }
 function dateSheet() {
   const t = new Date(Date.now() + 2 * 3600e3); const hh = String(t.getHours()).padStart(2, '0'), mm = String(Math.floor(t.getMinutes() / 5) * 5).padStart(2, '0');
   openSheet(`${sheetHead('Date check-in')}
-    <p class="small muted">Only your group sees this. If you don't tap "I'm OK" by the time you set, they get an alert.</p>
+    <p class="small muted">Only your circle sees this. If you don't tap "I'm OK" by the time you set, they get an alert.</p>
     <div class="field"><label for="dWho">Who are you meeting?</label><input id="dWho" maxlength="40" placeholder="First name"></div>
     <div class="field"><label for="dWhere">Where?</label><input id="dWhere" maxlength="60" placeholder="Place"></div>
     <div class="field"><label for="dTime">Check on me at</label><input id="dTime" type="time" value="${hh}:${mm}"></div>
@@ -1269,7 +1269,7 @@ function rideSheet() {
     <div class="field"><label for="rPlate">Car plate</label><input id="rPlate" maxlength="12" placeholder="512 BKT" style="text-transform:uppercase"></div>
     <div class="field"><label for="rTo">Going to</label><input id="rTo" maxlength="60" value="Home"></div>
     <div class="field"><span class="lab">Ride time</span><div class="pick" id="rMin">${[10, 15, 20, 30, 45].map((m) => `<button class="${m === 20 ? 'on' : ''}" data-act="pick-one" data-v="${m}">${m} min</button>`).join('')}</div></div>
-    <button class="btn block" data-act="ride-go">${ic('car')}Share ride with my group</button>`);
+    <button class="btn block" data-act="ride-go">${ic('car')}Share ride with my circle</button>`);
 }
 function placeSheet(id) {
   const p = S.places.find((x) => x.id === id); if (!p) return;
@@ -1321,7 +1321,7 @@ function eventSheet(id) {
     <div class="stack"><b>${eventCountLine(e)}</b>${going.length ? going.map((m) => `<div class="row">${avatar(m.name)}<span class="grow">${esc(m.name)}</span>${m.user_id !== S.user.id ? `<button class="tiny" data-act="dm-start:${m.user_id}:${esc(m.name)}">Message</button>` : ''}</div>`).join('') : '<p class="small muted">Nobody yet. Be the first.</p>'}</div>
     ${mine ? `<button class="btn block" data-act="event-chat:${e.id}">${ic('users')}Open event chat</button>` : ''}
     ${act}${own ? `<button class="btn ghost block" data-act="event-cancel:${e.id}">Cancel this event</button>` : `<button class="btn ghost sm" data-act="report:event:${e.id}">Report</button>${S.admin ? `<button class="btn ghost sm" data-act="mod-del:event:${e.id}">Remove (moderator)</button>` : ''}`}
-    <p class="small muted">Meet in a public place first, and let your Sis group know where you are going.</p>`);
+    <p class="small muted">Meet in a public place first, and let your Sis circle know where you are going.</p>`);
 }
 function newEventSheet(kind) {
   const d = new Date(Date.now() + 24 * 3600e3); d.setHours(18, 0, 0, 0);
@@ -1446,7 +1446,7 @@ function bindSOS() {
 }
 async function sendSOS() {
   if (needGroup()) {
-    toast('Create or join a group to send an SOS.', 'alert');
+    toast('Create or join a circle to send an SOS.', 'alert');
     return;
   }
   const saved = await updateMe({ sos: true, sos_at: new Date().toISOString() });
@@ -1456,7 +1456,7 @@ async function sendSOS() {
   }
   try { navigator.vibrate && navigator.vibrate(80); } catch (e) { /* unavailable */ }
   startSharing(true);
-  toast('SOS saved to your group. They can see where you are.', 'alert');
+  toast('SOS saved to your circle. They can see where you are.', 'alert');
   render();
   if (typeof openSheet === 'function') sosSheet();
 }
@@ -1582,7 +1582,7 @@ document.addEventListener('click', async (e) => {
       case 'pick-one': el.parentElement.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === el)); return;
       case 'group-new': return newGroupSheet();
       case 'group-join': return joinSheet();
-      case 'group-create': { const n = $('#gName').value.trim(); if (!n) return toast('Give the group a name', 'alert'); const h = picked('#gHours'); return createGroup(n, h ? +h : null); }
+      case 'group-create': { const n = $('#gName').value.trim(); if (!n) return toast('Give the circle a name', 'alert'); const h = picked('#gHours'); return createGroup(n, h ? +h : null); }
       case 'group-join-go': { const c = $('#jCode').value.trim(); if (c.length < 6) return toast('The code has 6 characters', 'alert'); return joinGroup(c); }
       case 'invite': return inviteSheet();
       case 'copy-link': { const v = $('#inviteLink').value; try { await navigator.clipboard.writeText(v); toast('Link copied'); } catch (err) { $('#inviteLink').select(); toast('Select and copy the link', 'link'); } return; }
@@ -1625,17 +1625,17 @@ document.addEventListener('click', async (e) => {
         if (m && m.image_path) sb.storage.from(BUG_BUCKET).remove([m.image_path]);
         const d = await fetchBugs(); if (d) renderBugs(d); return;
       }
-      case 'home': if (needGroup()) return; if (!await updateMe({ status: 'home', walk_deadline: null, walk_to: null, sos: false, place: null })) return; stopSharing(true); render(); toast("Home status saved to your group", 'home'); return;
-      case 'ok': if (!await updateMe({ walk_deadline: null, walk_to: null })) return; render(); toast("OK status saved to your group"); return;
+      case 'home': if (needGroup()) return; if (!await updateMe({ status: 'home', walk_deadline: null, walk_to: null, sos: false, place: null })) return; stopSharing(true); render(); toast("Home status saved to your circle", 'home'); return;
+      case 'ok': if (!await updateMe({ walk_deadline: null, walk_to: null })) return; render(); toast("OK status saved to your circle"); return;
       case 'add5': { const me = myRow(); const base = Math.max(Date.now(), new Date(me.walk_deadline).getTime()); if (!await updateMe({ walk_deadline: new Date(base + 5 * 60000).toISOString() })) return; render(); toast('Added 5 minutes', 'clock'); return; }
       case 'walk': if (needGroup()) return; return walkSheet();
-      case 'walk-go': { const min = +(picked('#wMin') || 15), to = $('#wTo').value.trim() || 'Home'; closeSheet(); await updateMe({ status: 'on_way', walk_to: to, place: null, walk_deadline: new Date(Date.now() + min * 60000).toISOString() }); if (shareRule('trips')) startSharing(true); render(); $('#main').scrollTop = 0; toast('Your group is with you', 'nav'); return; }
+      case 'walk-go': { const min = +(picked('#wMin') || 15), to = $('#wTo').value.trim() || 'Home'; closeSheet(); await updateMe({ status: 'on_way', walk_to: to, place: null, walk_deadline: new Date(Date.now() + min * 60000).toISOString() }); if (shareRule('trips')) startSharing(true); render(); $('#main').scrollTop = 0; toast('Your circle is with you', 'nav'); return; }
       case 'share': if (needGroup()) return; if (myRow()?.sharing || S.watchId != null) { stopSharing(true); toast('Location sharing is off', 'lock'); } else startSharing(false); if (S.tab === 'me') render(); return;
       case 'share-rule': ls.set('share.' + arg, shareRule(arg) ? '0' : '1'); if (arg === 'night') S.nightShared = false; return render();
       case 'noop': return;
       case 'call-112': toast('Demo: in the real app this calls 112', 'phone'); return;
-      case 'sos-safe': closeSheet(); if (!await updateMe({ sos: false })) return; render(); toast("Your group can see you're safe"); return;
-      case 'sos-cancel': if (!await updateMe({ sos: false })) return; render(); toast("Your group can see you're safe"); return;
+      case 'sos-safe': closeSheet(); if (!await updateMe({ sos: false })) return; render(); toast("Your circle can see you're safe"); return;
+      case 'sos-cancel': if (!await updateMe({ sos: false })) return; render(); toast("Your circle can see you're safe"); return;
       case 'nearby': return sisDemoStart();
       case 'safe-places': return safePlacesSheet();
       case 'fakecall': return fakeCall();
@@ -1643,11 +1643,11 @@ document.addEventListener('click', async (e) => {
       case 'call-end': clearInterval(callT); $('#callLayer').innerHTML = ''; return;
       case 'notify': if ('Notification' in window && Notification.permission === 'default') { const r = await Notification.requestPermission(); if (r === 'granted') await pushEnable(); toast(r === 'granted' ? 'Alerts are on' : 'Alerts stay off', r === 'granted' ? 'bell' : 'alert'); render(); } else if (!('Notification' in window)) toast('Add Sis to your home screen to get alerts', 'bell'); return;
       case 'arrived': if (needGroup()) return; return arrivedSheet();
-      case 'arrived-go': { const place = $('#aPlace').value.trim() || 'Arrived safely', withLoc = $('#aLoc').checked; closeSheet(); let patch = { status: 'out', place, walk_deadline: null, walk_to: null }; if (withLoc) { const p = await locateOnce(); if (p) patch = { ...patch, ...p, located_at: new Date().toISOString() }; else toast('Could not get your location', 'alert'); } await updateMe(patch); render(); toast('Your group knows you arrived'); return; }
+      case 'arrived-go': { const place = $('#aPlace').value.trim() || 'Arrived safely', withLoc = $('#aLoc').checked; closeSheet(); let patch = { status: 'out', place, walk_deadline: null, walk_to: null }; if (withLoc) { const p = await locateOnce(); if (p) patch = { ...patch, ...p, located_at: new Date().toISOString() }; else toast('Could not get your location', 'alert'); } await updateMe(patch); render(); toast('Your circle knows you arrived'); return; }
       case 'date': if (needGroup()) return; return dateSheet();
       case 'date-go': { const who = $('#dWho').value.trim(), where = $('#dWhere').value.trim(), [hh, mm] = ($('#dTime').value || '22:00').split(':').map(Number); const d = new Date(); d.setHours(hh, mm, 0, 0); if (d < new Date()) d.setDate(d.getDate() + 1); const live = $('#dLoc').checked; closeSheet(); await updateMe({ status: 'out', place: where || null, walk_to: `Date${who ? ' with ' + who : ''}`, walk_deadline: d.toISOString() }); if (live) startSharing(true); render(); toast(`Check-in set for ${fmtTime(d)}`, 'heart'); return; }
       case 'ride': if (needGroup()) return; return rideSheet();
-      case 'ride-go': { const plate = $('#rPlate').value.trim().toUpperCase(), to = $('#rTo').value.trim() || 'Home', min = +(picked('#rMin') || 20); closeSheet(); await updateMe({ status: 'on_way', place: plate ? `Taxi ${plate}` : 'In a taxi', walk_to: to, walk_deadline: new Date(Date.now() + min * 60000).toISOString() }); if (shareRule('trips')) startSharing(true); render(); toast('Your group is following your ride', 'car'); return; }
+      case 'ride-go': { const plate = $('#rPlate').value.trim().toUpperCase(), to = $('#rTo').value.trim() || 'Home', min = +(picked('#rMin') || 20); closeSheet(); await updateMe({ status: 'on_way', place: plate ? `Taxi ${plate}` : 'In a taxi', walk_to: to, walk_deadline: new Date(Date.now() + min * 60000).toISOString() }); if (shareRule('trips')) startSharing(true); render(); toast('Your circle is following your ride', 'car'); return; }
       case 'trip': await go('sisterhood'); return newEventSheet('trip');
       case 'filter': S.placeFilter = arg; document.querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', c.dataset.act === 'filter:' + arg)); $('#placeList').innerHTML = placeListHTML(); updatePlacesMap(); return;
       case 'place': return placeSheet(arg);
@@ -1784,7 +1784,7 @@ document.addEventListener('click', async (e) => {
         S.name = name; S.phone = phone || ''; ls.set('name', name); closeSheet(); await fetchMembers(); render(); toast('Saved'); return;
       }
       case 'toggle-auto': S.auto = !S.auto; ls.set('auto', S.auto ? '1' : '0'); if (S.auto) S.mode = autoMode(); return render();
-      case 'signout': if (!el.dataset.sure) { el.dataset.sure = '1'; el.textContent = 'Tap again to sign out. Your groups stay, but this device forgets you.'; return; } stopSharing(true); await sb.auth.signOut(); location.reload(); return;
+      case 'signout': if (!el.dataset.sure) { el.dataset.sure = '1'; el.textContent = 'Tap again to sign out. Your circles stay, but this device forgets you.'; return; } stopSharing(true); await sb.auth.signOut(); location.reload(); return;
       case 'delete-account': {
         if (!el.dataset.sure) { el.dataset.sure = '1'; el.textContent = 'Tap again to permanently delete your account and all your data. This cannot be undone.'; return; }
         stopSharing(true);
@@ -1809,7 +1809,7 @@ function tick() {
     const c = $('#confirmTime'); if (c) c.textContent = mmss((dl + 60000 - now) / 1000);
   } else lastPhase = null;
   if (Date.now() % 5000 < 1000) { checkAlerts(); if (S.tab === 'home') { const bn = $('#banners'); if (bn) bn.innerHTML = bannersHTML(); } renderTabs(); }
-  if (groupEnded() && S.watchId != null) { stopSharing(true); toast('Night out ended. Location sharing is off.', 'lock'); render(); }
+  if (groupEnded() && S.watchId != null) { stopSharing(true); toast('Circle ended. Location sharing is off.', 'lock'); render(); }
   if (S.auto && Date.now() % 30000 < 1000) { const m = autoMode(); if (m !== S.mode) { S.mode = m; render(); } }
 }
 
