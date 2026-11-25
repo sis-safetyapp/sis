@@ -469,7 +469,7 @@ async function joinGroup(code) {
   const { data, error } = await sb.rpc('join_group', { p_code: code, p_member_name: S.name, p_phone: S.phone || null });
   if (error) { toast(error.message.includes('code not found') ? 'That code does not exist. Check it with your friend.' : error.message, 'alert'); return; }
   if (!S.groups.find((g) => g.id === data.id)) S.groups.push(data);
-  await selectGroup(data.id); closeSheet(); render(); toast(`You joined ${data.name}`, 'users');
+  await selectGroup(data.id); closeSheet(); render(); toast(`You joined ${data.name}`, 'users'); maybeAskPhone();
 }
 async function leaveGroup(id) {
   if (id === S.gid) stopSharing(true);
@@ -508,7 +508,7 @@ function startSharing(silent) {
   if (!('geolocation' in navigator)) { toast('Location is not available on this device', 'alert'); return; }
   if (S.watchId != null) return;
   S.watchId = navigator.geolocation.watchPosition(sendPos, (err) => {
-    toast(err.code === 1 ? 'Location is blocked. Allow it for this site in your browser settings.' : 'Could not get your location', 'alert');
+    if (err.code === 1) { if (!S.locHelpAt || Date.now() - S.locHelpAt > 60000) { S.locHelpAt = Date.now(); locBlockedSheet(); } } else toast('Could not get your location', 'alert');
     if (err.code === 1) stopSharing(false);
   }, { enableHighAccuracy: true, maximumAge: 10000, timeout: 30000 });
   keepAwake(true);
@@ -962,6 +962,29 @@ function chatRowHTML(r) {
     if (btn) { e.preventDefault(); const b = $('#sheet').querySelector(btn); if (b) b.click(); }
   });
 })();
+/* ---------------- phone ask, past events, location help ---------------- */
+function maybeAskPhone() {
+  if (!LIVE || S.phone || ls.get('phoneAsk') === '1') return;
+  ls.set('phoneAsk', '1');
+  openSheet(`${sheetHead('Add your phone?')}
+    <p class="muted">If you ever send an SOS, your sisters can call you straight away. Only the women in your circles see it. You can skip this and add it later in Me.</p>
+    <div class="field"><label for="aPhone">Phone (optional)</label><input id="aPhone" type="tel" maxlength="30" autocomplete="tel" placeholder="+372 ..."></div>
+    <button class="btn block" data-act="phone-ask-save">Save</button>
+    <button class="btn ghost block" data-act="close">Not now</button>`);
+}
+function locBlockedSheet() {
+  openSheet(`${sheetHead('Location is off for sis.')}
+    <p class="muted">Your browser blocked location for this site. Your circle cannot see you until you allow it.</p>
+    <div class="stack"><h3>iPhone</h3><p class="small muted">In Safari, tap <b>aA</b> in the address bar, then <b>Website Settings</b>, then <b>Location</b>, then <b>Allow</b>. Still blocked? Open <b>Settings, Privacy &amp; Security, Location Services</b> and set <b>Safari Websites</b> to <b>While Using</b>. For the Home Screen icon, close it fully and open it again after that.</p></div>
+    <div class="stack"><h3>Android</h3><p class="small muted">In Chrome, tap the lock icon next to the address, then <b>Permissions</b>, then <b>Location</b>, then <b>Allow</b>. For the Home Screen icon, press and hold it, tap <b>App info</b>, then <b>Permissions</b>, then <b>Location</b>.</p></div>
+    <button class="btn block" data-act="close">OK</button>`);
+}
+function pastEventsHTML() {
+  const cut = Date.now() - 3 * 3600e3, past = S.events.filter((e) => new Date(e.starts_at).getTime() < cut).sort((a, b) => new Date(b.starts_at) - new Date(a.starts_at)).slice(0, 20);
+  if (!past.length) return '';
+  return `<button class="item archrow" data-act="past-show"><span class="grow"><span class="t">Past events</span><br><span class="s">${past.length} ${S.showPast ? '· tap to hide' : '· tap to show'}</span></span></button>` +
+    (S.showPast ? past.map((e) => { const d = new Date(e.starts_at); return `<div class="card ev" data-act="event-open:${e.id}" role="button" tabindex="0" style="opacity:.75"><div class="datebox"><b>${d.getDate()}</b><span>${d.toLocaleDateString('en-GB', { month: 'short' })}</span></div><div class="grow stack"><h3>${esc(e.title)}</h3><p class="small muted">${e.place ? esc(e.place) : 'Past event'}</p></div></div>`; }).join('') : '');
+}
 function sisterhoodScreen() {
   const seg = ['threads', 'chats'].includes(S.seg) ? S.seg : 'events', pins = S.pins || new Set();
   let body;
@@ -992,6 +1015,7 @@ function sisterhoodScreen() {
         <div class="row between"><span class="small muted">${eventCountLine(e)}</span>${join}</div></div></div>`;
     }).join('') : `<div class="empty">${ic('users')}<b>No events yet</b><span class="small">Planning a walk, a coffee or a trip? Invite the others.</span><button class="btn sm" data-act="new-event:meetup">${ic('plus')}Add an event</button></div>`;
   }
+  if (seg === 'events') body += pastEventsHTML();
   const act = seg === 'threads' ? ['new-thread', 'Topic'] : seg === 'events' ? ['new-event:meetup', 'Event'] : null;
   return `<section class="screen">
     <div><h1>Community</h1><p class="muted" style="margin-top:4px">Meet other women in person, or just talk.</p></div>
@@ -1008,7 +1032,7 @@ function shareRule(k) { const r = SHARE_RULES.find((x) => x.k === k); if (!r) re
 function meScreen() {
   const notif = 'Notification' in window ? Notification.permission : 'unsupported';
   return `<section class="screen">
-    <div class="row">${avatar(S.name)}<div class="grow"><h1 style="font-size:26px">${esc(S.name)}</h1><p class="small muted">${esc(S.phone || 'No phone added')}</p></div><button class="btn sm ghost" data-act="edit-profile">Edit</button></div>
+    <div class="row">${avatar(S.name)}<div class="grow"><h1 style="font-size:26px">${esc(S.name)}</h1><p class="small muted">${esc(S.phone || 'No phone added')}</p>${LIVE && S.user && S.user.email ? `<p class="small muted">${esc(S.user.email)}</p>` : ''}</div><button class="btn sm ghost" data-act="edit-profile">Edit</button></div>
     <div class="stack"><div class="sec-head"><h2>My groups</h2><div class="row"><button class="link" data-act="group-join">Join</button><button class="link" data-act="group-new">+ New</button></div></div>
       ${S.groups.length ? `<div class="list">${S.groups.map((g) => `<div class="item"><button class="grow" style="text-align:left" data-act="select-group:${g.id}"><span class="t">${esc(g.name)}</span><br><span class="s">Code ${esc(g.code)}${g.ends_at ? ' · ends ' + new Date(g.ends_at).toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</span></button>
         ${g.id === S.gid ? `<span class="pill acc">Active</span>` : ''}<button class="btn sm ghost" data-act="leave-group:${g.id}">Leave</button></div>`).join('')}</div>` : '<p class="muted small">No groups yet.</p>'}</div>
@@ -1652,6 +1676,13 @@ document.addEventListener('click', async (e) => {
       case 'chat-arch': { const was = chatSt(arg).a; chatPut(arg, { a: was ? null : Date.now() }); render(); toast(was ? 'Moved back to chats' : 'Archived. A new message brings it back.', 'check'); return; }
       case 'chat-del-row': { if (!el.dataset.sure) { el.dataset.sure = '1'; el.textContent = 'Sure?'; return; } chatPut(arg, { d: Date.now(), a: null }); render(); toast('Chat deleted for you', 'check'); return; }
       case 'chat-arch-show': S.showArch = !S.showArch; return render();
+      case 'past-show': S.showPast = !S.showPast; return render();
+      case 'phone-ask-save': {
+        const phone = ($('#aPhone').value || '').trim() || null; if (!phone) { closeSheet(); return; }
+        const { error } = await sb.from('profiles').update({ phone }).eq('id', S.user.id); if (error) return fail(error);
+        await sb.from('group_members').update({ phone }).eq('user_id', S.user.id);
+        S.phone = phone; closeSheet(); await fetchMembers(); render(); toast('Saved'); return;
+      }
       case 'home-set': closeSheet(); return go('me');
       case 'home-here': { const p = await locateOnce(); if (!p) return toast('Could not get your location. Check Location settings.', 'alert'); ls.set('home', JSON.stringify({ lat: p.lat, lng: p.lng })); render(); toast('Home saved on this phone only', 'home'); return; }
       case 'home-pick': S.homePick = true; await go('home'); toast('Tap the map where your home is', 'pin'); return;
