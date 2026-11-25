@@ -611,7 +611,7 @@ function checkAlerts() {
     if (S.alerted.has(a.key)) continue;
     S.alerted.add(a.key);
     const title = a.kind === 'sos' ? `${a.m.name} sent an SOS` : `${a.m.name} hasn't checked in`;
-    const body = a.kind === 'sos' ? 'Open Sis to see where she is and call her.' : `She was due by ${fmtTime(a.m.walk_deadline)}${a.m.walk_to ? ' (' + a.m.walk_to + ')' : ''}.`;
+    const body = a.kind === 'sos' ? 'Open Sis to see where she is and call her.' : `She was due by ${fmtTime(a.m.walk_deadline)}${a.m.walk_to ? ' (' + a.m.walk_to + ')' : ''}.${/^(Taxi |In a taxi)/.test(a.m.place || '') ? ' ' + a.m.place + '.' : ''}`;
     toast(title, 'alert');
     // Native SOS sound is possible while Sis is open and detects this group's
     // event. This is NOT push while the app is terminated or the phone is offline.
@@ -742,7 +742,7 @@ function myCardHTML() {
   if (now < dl) {
     return `<div class="card stack" id="walkCard"><div class="row between"><span class="pill acc"><span class="dot live"></span>${me.status === 'on_way' ? 'On my way' : 'Check-in set'}</span><span class="small muted">${esc(me.walk_to || '')}</span></div>
       <div class="timer" id="walkTime">${mmss((dl - now) / 1000)}</div>
-      <div class="row"><button class="btn safe" style="flex:1" data-act="${me.status === 'on_way' ? 'home' : 'ok'}">${ic('check')}${me.status === 'on_way' ? "I'm home" : "I'm OK"}</button><button class="btn ghost" data-act="add5">+5 min</button></div></div>`;
+      <div class="row"><button class="btn safe" style="flex:1" data-act="${me.status === 'on_way' ? 'home' : 'ok'}">${ic('check')}${me.status === 'on_way' ? (/^(Taxi |In a taxi)/.test(me.place || '') ? 'I arrived' : "I'm home") : "I'm OK"}</button><button class="btn ghost" data-act="add5">+5 min</button></div></div>`;
   }
   if (now < dl + 60000) return `<div class="card stack alertcard" id="walkCard"><div class="row" style="color:var(--danger)">${ic('alert')}<h2>Are you OK, ${esc(S.name)}?</h2></div>
       <p>Confirm you're safe or your circle gets an alert in <b id="confirmTime">${mmss((dl + 60000 - now) / 1000)}</b>.</p>
@@ -1266,8 +1266,10 @@ function dateSheet() {
 }
 function rideSheet() {
   openSheet(`${sheetHead('Share my ride')}
-    <div class="field"><label for="rPlate">Car plate</label><input id="rPlate" maxlength="12" placeholder="512 BKT" style="text-transform:uppercase"></div>
-    <div class="field"><label for="rTo">Going to</label><input id="rTo" maxlength="60" value="Home"></div>
+    <div class="field"><label for="rPlate">Car plate (optional)</label><input id="rPlate" maxlength="12" placeholder="512 BKT" style="text-transform:uppercase"></div>
+    <div class="field"><label for="rFrom">From (optional)</label><input id="rFrom" maxlength="60" placeholder="Kuu Bar"></div>
+    <div class="field"><label for="rTo">Going to (optional)</label><input id="rTo" maxlength="60" value="Home"></div>
+    <p class="small muted">Fill in only what you want. The ride time is enough.</p>
     <div class="field"><span class="lab">Ride time</span><div class="pick" id="rMin">${[10, 15, 20, 30, 45].map((m) => `<button class="${m === 20 ? 'on' : ''}" data-act="pick-one" data-v="${m}">${m} min</button>`).join('')}</div></div>
     <button class="btn block" data-act="ride-go">${ic('car')}Share ride with my circle</button>`);
 }
@@ -1647,7 +1649,7 @@ document.addEventListener('click', async (e) => {
       case 'date': if (needGroup()) return; return dateSheet();
       case 'date-go': { const who = $('#dWho').value.trim(), where = $('#dWhere').value.trim(), [hh, mm] = ($('#dTime').value || '22:00').split(':').map(Number); const d = new Date(); d.setHours(hh, mm, 0, 0); if (d < new Date()) d.setDate(d.getDate() + 1); const live = $('#dLoc').checked; closeSheet(); await updateMe({ status: 'out', place: where || null, walk_to: `Date${who ? ' with ' + who : ''}`, walk_deadline: d.toISOString() }); if (live) startSharing(true); render(); toast(`Check-in set for ${fmtTime(d)}`, 'heart'); return; }
       case 'ride': if (needGroup()) return; return rideSheet();
-      case 'ride-go': { const plate = $('#rPlate').value.trim().toUpperCase(), to = $('#rTo').value.trim() || 'Home', min = +(picked('#rMin') || 20); closeSheet(); await updateMe({ status: 'on_way', place: plate ? `Taxi ${plate}` : 'In a taxi', walk_to: to, walk_deadline: new Date(Date.now() + min * 60000).toISOString() }); if (shareRule('trips')) startSharing(true); render(); toast('Your circle is following your ride', 'car'); return; }
+      case 'ride-go': { const plate = $('#rPlate').value.trim().toUpperCase(), from = $('#rFrom').value.trim(), dest = $('#rTo').value.trim(), min = +(picked('#rMin') || 20), to = from && dest ? (from + ' → ' + dest) : dest || (from ? 'From ' + from : null); closeSheet(); await updateMe({ status: 'on_way', place: plate ? `Taxi ${plate}` : 'In a taxi', walk_to: to, walk_deadline: new Date(Date.now() + min * 60000).toISOString() }); if (shareRule('trips')) startSharing(true); render(); toast('Your circle is following your ride', 'car'); return; }
       case 'trip': await go('sisterhood'); return newEventSheet('trip');
       case 'filter': S.placeFilter = arg; document.querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', c.dataset.act === 'filter:' + arg)); $('#placeList').innerHTML = placeListHTML(); updatePlacesMap(); return;
       case 'place': return placeSheet(arg);
