@@ -78,7 +78,7 @@ function autoMode() { const n = new Date(), ss = sunTime(n, false), sr = sunTime
 let toastT;
 function toast(msg, icon = 'check') { const t = $('#toast'); t.innerHTML = ic(icon) + `<span>${esc(msg)}</span>`; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 3000); }
 function openSheet(html) { if (window.sisStopNearbyDemo) window.sisStopNearbyDemo(); $('#sheet').innerHTML = '<div class="grab"></div>' + html; $('#sheet').classList.toggle('full', html.includes('class="chat"')); $('#sheet').classList.add('on'); $('#scrim').classList.add('on'); $('#sheet').scrollTop = 0; }
-function closeSheet() { clearInterval(S.chatT); const wasChat = !!S.chat; S.chat = null; if (wasChat) setTimeout(() => { try { render(); } catch (e) { /* ignore */ } }, 0); if (window.sisStopNearbyDemo) window.sisStopNearbyDemo(); $('#sheet').classList.remove('on'); $('#scrim').classList.remove('on'); S.addMode = false; }
+function closeSheet() { clearInterval(S.chatT); const wasChat = !!S.chat; S.chat = null; if (wasChat) setTimeout(() => { try { render(); } catch (e) { /* ignore */ } }, 0); if (window.sisStopNearbyDemo) window.sisStopNearbyDemo(); $('#sheet').classList.remove('on'); $('#scrim').classList.remove('on'); S.addMode = false; if (S.rideMap) { try { S.rideMap.remove(); } catch (e) { /* ignore */ } S.rideMap = null; } }
 const sheetHead = (title) => `<div class="row between"><h2>${title}</h2><button class="btn ghost sm" data-act="close" aria-label="Close">${ic('x')}</button></div>`;
 function fail(e) {
   console.error(e);
@@ -527,6 +527,8 @@ function checkArrivedHome(lat, lng, accuracy, speed) {
   if (!me || me.status !== 'on_way' || !me.walk_deadline) { S.homeIn = null; return; }
   if (S.homeAsk || Date.now() < (S.homeSnooze || 0)) return;
   let home = null; try { home = JSON.parse(ls.get('home') || 'null'); } catch (e) { /* no home saved */ }
+  let rd = null; try { rd = JSON.parse(ls.get('rideDest') || 'null'); } catch (e) { /* none */ }
+  if (rd && Number.isFinite(rd.lat) && Number.isFinite(rd.lng) && Date.now() < rd.until && /^(Taxi |In a taxi)/.test(me.place || '')) home = rd;
   if (!home || !Number.isFinite(home.lat) || !Number.isFinite(home.lng)) { S.homeIn = null; return; }
   if (!(accuracy <= 50)) return;
   if (distM({ lat, lng }, home) > HOME_RADIUS_M || (Number.isFinite(speed) && speed > 1.5)) { S.homeIn = null; return; }
@@ -539,7 +541,7 @@ function showHomeAsk() {
   const ph = document.getElementById('phone'); if (!ph || S.homeAsk) return;
   const el = document.createElement('div'); el.id = 'homeAsk'; el.className = 'homeask';
   let left = 30;
-  const paint = () => { el.innerHTML = `<b>Looks like you're home</b><p class="small muted">Sharing stops and your circle is told in <b>${left}</b> s.</p><div class="row"><button class="btn safe" style="flex:1" data-act="home-now">I'm home</button><button class="btn ghost" data-act="home-wait">Not yet</button></div>`; };
+  const paint = () => { el.innerHTML = `<b>${/^(Taxi |In a taxi)/.test((myRow() || {}).place || '') ? 'Looks like you arrived' : "Looks like you're home"}</b><p class="small muted">Sharing stops and your circle is told in <b>${left}</b> s.</p><div class="row"><button class="btn safe" style="flex:1" data-act="home-now">${/^(Taxi |In a taxi)/.test((myRow() || {}).place || '') ? 'I arrived' : "I'm home"}</button><button class="btn ghost" data-act="home-wait">Not yet</button></div>`; };
   paint(); ph.appendChild(el);
   try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) { /* no vibration */ }
   S.homeAsk = setInterval(() => {
@@ -1269,9 +1271,43 @@ function rideSheet() {
     <div class="field"><label for="rPlate">Car plate (optional)</label><input id="rPlate" maxlength="12" placeholder="512 BKT" style="text-transform:uppercase"></div>
     <div class="field"><label for="rFrom">From (optional)</label><input id="rFrom" maxlength="60" placeholder="Kuu Bar"></div>
     <div class="field"><label for="rTo">Going to (optional)</label><input id="rTo" maxlength="60" value="Home"></div>
+    <div class="field"><span class="lab">Pick the destination on the map (optional)</span><div class="map" id="rideMap" style="height:170px"></div><p class="small muted" id="rideEst">Tap the map to get a rough time. You can change it.</p></div>
     <p class="small muted">Fill in only what you want. The ride time is enough.</p>
-    <div class="field"><span class="lab">Ride time</span><div class="pick" id="rMin">${[10, 15, 20, 30, 45].map((m) => `<button class="${m === 20 ? 'on' : ''}" data-act="pick-one" data-v="${m}">${m} min</button>`).join('')}</div></div>
+    <div class="field"><span class="lab">Ride time</span><div class="pick" id="rMin">${[10, 15, 20, 30, 45].map((m) => `<button class="${m === 20 ? 'on' : ''}" data-act="pick-one" data-v="${m}">${m} min</button>`).join('')}</div><input id="rMinOther" type="number" min="1" max="90" inputmode="numeric" placeholder="Other, in minutes (up to 90)" style="margin-top:8px"></div>
     <button class="btn block" data-act="ride-go">${ic('car')}Share ride with my circle</button>`);
+  S.rideDest = null; S.rideFrom = null; S.rideTouched = false;
+  setTimeout(rideMapInit, 80);
+}
+async function rideMapInit() {
+  const el = $('#rideMap'); if (!el || !window.L) return;
+  if (S.rideMap) { try { S.rideMap.remove(); } catch (e) { /* ignore */ } S.rideMap = null; }
+  const map = L.map(el, { zoomControl: false, attributionControl: true }).setView(TALLINN, 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+  el.classList.add('carto'); S.rideMap = map;
+  setTimeout(() => { if (S.rideMap === map) map.invalidateSize(); }, 250);
+  let pin = null;
+  map.on('click', (e) => {
+    S.rideDest = { lat: e.latlng.lat, lng: e.latlng.lng };
+    if (pin) pin.setLatLng(e.latlng); else pin = L.circleMarker(e.latlng, { radius: 9, color: '#fff', weight: 2, fillColor: '#B39BFF', fillOpacity: 1 }).addTo(map);
+    rideEstimate();
+  });
+  const other = $('#rMinOther');
+  if (other) other.addEventListener('input', () => { S.rideTouched = true; document.querySelectorAll('#rMin button').forEach((b) => b.classList.remove('on')); });
+  const p = await locateOnce();
+  if (!p || S.rideMap !== map) return;
+  S.rideFrom = p; map.setView([p.lat, p.lng], 14);
+  L.circleMarker([p.lat, p.lng], { radius: 7, color: '#fff', weight: 2, fillColor: '#6FD3A5', fillOpacity: 1 }).addTo(map);
+  rideEstimate();
+}
+function rideEstimate() {
+  const d = S.rideDest, f = S.rideFrom, out = $('#rideEst'); if (!out || !d) return;
+  if (!f) { out.textContent = 'Pin set. Allow your location to get a rough time, or choose the time yourself.'; return; }
+  const km = distM(f, d) / 1000, min = Math.max(5, Math.min(90, Math.round(km / 25 * 60 + 3)));
+  out.innerHTML = `About ${km.toFixed(1)} km, roughly <b>${min} min</b>. You can change it below.`;
+  if (S.rideTouched) return;
+  const near = [10, 15, 20, 30, 45].find((m) => m >= min), other = $('#rMinOther');
+  document.querySelectorAll('#rMin button').forEach((b) => b.classList.toggle('on', near != null && +b.dataset.v === near));
+  if (other) other.value = near == null ? String(min) : '';
 }
 function placeSheet(id) {
   const p = S.places.find((x) => x.id === id); if (!p) return;
@@ -1581,7 +1617,7 @@ document.addEventListener('click', async (e) => {
       case 'mode': if (S.mode !== arg) { S.mode = arg; S.auto = false; ls.set('auto', '0'); ls.set('mode', arg); applyMode(); render(); toast(arg === 'night' ? 'Night mode on. Safety tools come first.' : 'Day mode on.', arg === 'night' ? 'moon' : 'sun'); } return;
       case 'tab': closeSheet(); return go(arg);
       case 'close': return closeSheet();
-      case 'pick-one': el.parentElement.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === el)); return;
+      case 'pick-one': el.parentElement.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === el)); S.rideTouched = true; { const o = document.getElementById('rMinOther'); if (o) o.value = ''; } return;
       case 'group-new': return newGroupSheet();
       case 'group-join': return joinSheet();
       case 'group-create': { const n = $('#gName').value.trim(); if (!n) return toast('Give the circle a name', 'alert'); const h = picked('#gHours'); return createGroup(n, h ? +h : null); }
@@ -1649,7 +1685,7 @@ document.addEventListener('click', async (e) => {
       case 'date': if (needGroup()) return; return dateSheet();
       case 'date-go': { const who = $('#dWho').value.trim(), where = $('#dWhere').value.trim(), [hh, mm] = ($('#dTime').value || '22:00').split(':').map(Number); const d = new Date(); d.setHours(hh, mm, 0, 0); if (d < new Date()) d.setDate(d.getDate() + 1); const live = $('#dLoc').checked; closeSheet(); await updateMe({ status: 'out', place: where || null, walk_to: `Date${who ? ' with ' + who : ''}`, walk_deadline: d.toISOString() }); if (live) startSharing(true); render(); toast(`Check-in set for ${fmtTime(d)}`, 'heart'); return; }
       case 'ride': if (needGroup()) return; return rideSheet();
-      case 'ride-go': { const plate = $('#rPlate').value.trim().toUpperCase(), from = $('#rFrom').value.trim(), dest = $('#rTo').value.trim(), min = +(picked('#rMin') || 20), to = from && dest ? (from + ' → ' + dest) : dest || (from ? 'From ' + from : null); closeSheet(); await updateMe({ status: 'on_way', place: plate ? `Taxi ${plate}` : 'In a taxi', walk_to: to, walk_deadline: new Date(Date.now() + min * 60000).toISOString() }); if (shareRule('trips')) startSharing(true); render(); toast('Your circle is following your ride', 'car'); return; }
+      case 'ride-go': { const plate = $('#rPlate').value.trim().toUpperCase(), from = $('#rFrom').value.trim(), dest = $('#rTo').value.trim(), min = (() => { const o = parseInt(($('#rMinOther') || {}).value, 10); return o > 0 ? Math.min(90, o) : +(picked('#rMin') || 20); })(), to = from && dest ? (from + ' → ' + dest) : dest || (from ? 'From ' + from : null); ls.set('rideDest', S.rideDest ? JSON.stringify({ lat: S.rideDest.lat, lng: S.rideDest.lng, until: Date.now() + (min + 30) * 60000 }) : ''); closeSheet(); await updateMe({ status: 'on_way', place: plate ? `Taxi ${plate}` : 'In a taxi', walk_to: to, walk_deadline: new Date(Date.now() + min * 60000).toISOString() }); if (shareRule('trips')) startSharing(true); render(); toast('Your circle is following your ride', 'car'); return; }
       case 'trip': await go('sisterhood'); return newEventSheet('trip');
       case 'filter': S.placeFilter = arg; document.querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', c.dataset.act === 'filter:' + arg)); $('#placeList').innerHTML = placeListHTML(); updatePlacesMap(); return;
       case 'place': return placeSheet(arg);
