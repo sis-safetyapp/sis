@@ -555,7 +555,7 @@ function closeHomeAsk() { clearInterval(S.homeAsk); S.homeAsk = null; S.homeIn =
 async function arriveHome(auto) {
   closeHomeAsk();
   if (needGroup()) return;
-  if (!await updateMe({ status: 'home', walk_deadline: null, walk_to: null, sos: false, place: null })) return;
+  if (!await updateMe({ status: 'home', walk_deadline: null, walk_to: null, ride_link: null, sos: false, place: null })) return;
   stopSharing(true); render();
   toast(auto ? "Looks like you're home. Your circle knows." : 'Home status saved to your circle', 'home');
 }
@@ -640,7 +640,7 @@ function bannersHTML() {
   return alertsList().map(({ kind, key, m }) => {
     const seen = m.lat != null ? `<button class="btn sm ${kind === 'sos' ? 'white' : ''}" data-act="see-member:${m.user_id}">${ic('pin')}See on map</button>` : '<span class="small">No location shared</span>';
     const call = m.phone ? `<a class="btn sm ${kind === 'sos' ? 'white' : 'ghost'}" href="tel:${esc(m.phone)}">${ic('phone')}Call ${esc(m.name)}</a>` : '';
-    const ext = m.lat != null ? `<a class="tiny" href="${mapsLink(m.lat, m.lng)}" target="_blank" rel="noopener">Open in Maps</a>` : '';
+    const ext = (m.lat != null ? `<a class="tiny" href="${mapsLink(m.lat, m.lng)}" target="_blank" rel="noopener">Open in Maps</a>` : '') + (boltOk(m) ? ` <a class="tiny" href="${esc(m.ride_link)}" target="_blank" rel="noopener">Open Bolt ride</a>` : '');
     return `<div class="banner ${kind === 'late' ? 'late' : ''}" role="alert">
       <div class="row">${ic('alert')}<b>${kind === 'sos' ? `${esc(m.name)} sent an SOS` : `${esc(m.name)} hasn't checked in`}</b></div>
       <span class="small">${kind === 'sos' ? `${ago(m.sos_at)}${m.located_at ? ' · location updated ' + ago(m.located_at) : ''}` : `Due by ${fmtTime(m.walk_deadline)}${m.walk_to ? ' · ' + esc(m.walk_to) : ''}`}</span>
@@ -709,12 +709,26 @@ function memberSub(m) {
   bits.push(m.lat != null ? `location ${ago(m.located_at)}` : 'location off');
   return bits.join(' · ');
 }
+const BOLT_RE = /^https:\/\/ride\.bolt\.eu\//;
+const boltOk = (m) => !!(m && m.ride_link && BOLT_RE.test(m.ride_link));
+function boltParse(text) {
+  const s = String(text || '');
+  const link = (s.match(/https:\/\/ride\.bolt\.eu\/[^\s]*/i) || [])[0] || null;
+  if (!link) return null;
+  const eta = s.match(/Estimated arrival:\s*(\d{1,2}):(\d{2})/i), drop = s.match(/Dropoff:\s*([^\n]+)/i), veh = s.match(/Vehicle:\s*([^\n]+)/i);
+  let plate = null;
+  if (veh) { const parts = veh[1].split(',').map((x) => x.trim()); const p = (parts[parts.length - 1] || '').toUpperCase(); if (/^[A-Z0-9][A-Z0-9 -]{1,11}$/.test(p)) plate = p; }
+  let min = null;
+  if (eta) { const d = new Date(); d.setHours(+eta[1], +eta[2], 0, 0); const diff = Math.round((d - Date.now()) / 60000); if (diff >= 1) min = Math.min(90, diff); }
+  return { link: link.slice(0, 200), plate, to: drop ? drop[1].split(',')[0].trim().slice(0, 60) : '', min };
+}
 function membersHTML() {
   if (!S.members.length) return '<p class="muted small">Loading…</p>';
   const sorted = [...S.members].sort((a, b) => (b.user_id === S.user.id) - (a.user_id === S.user.id) || a.name.localeCompare(b.name));
   return sorted.map((m) => {
     const mine = m.user_id === S.user.id;
     return `<div class="item">${avatar(m.name, 'sm')}<span class="grow"><span class="t">${mine ? 'You' : esc(m.name)}</span><br><span class="s">${memberSub(m)}</span></span>${statusPill(m)}
+      ${!mine && boltOk(m) ? `<a class="btn sm ghost" href="${esc(m.ride_link)}" target="_blank" rel="noopener" aria-label="Open ${esc(m.name)}'s Bolt ride">Bolt</a>` : ''}
       ${!mine && m.phone ? `<a class="btn sm ghost" href="tel:${esc(m.phone)}" aria-label="Call ${esc(m.name)}">${ic('phone')}</a>` : ''}
       ${!mine && m.lat != null ? `<a class="btn sm ghost" href="${mapsLink(m.lat, m.lng)}" target="_blank" rel="noopener" aria-label="Open ${esc(m.name)} in maps">${ic('pin')}</a>` : ''}</div>`;
   }).join('') + (S.members.length === 1 ? `<div class="item"><span class="grow small muted">Nobody else here yet. Send the invite link to your friends.</span><button class="btn sm" data-act="invite">${ic('link')}Invite</button></div>` : '');
@@ -1268,14 +1282,24 @@ function dateSheet() {
 }
 function rideSheet() {
   openSheet(`${sheetHead('Share my ride')}
+    <div class="field"><span class="lab">Got a Bolt ride? Paste the message here (optional)</span><textarea id="rBolt" rows="3" placeholder="Paste Bolt's &quot;follow my ride&quot; message" style="width:100%;padding:11px;border-radius:11px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit"></textarea><p class="small muted" id="rBoltMsg">In Bolt, tap Share ride status and copy the message. sis. reads the car, the time, the place and the link.</p></div>
     <div class="field"><label for="rPlate">Car plate (optional)</label><input id="rPlate" maxlength="12" placeholder="512 BKT" style="text-transform:uppercase"></div>
-    <div class="field"><label for="rFrom">From (optional)</label><input id="rFrom" maxlength="60" placeholder="Kuu Bar"></div>
-    <div class="field"><label for="rTo">Going to (optional)</label><input id="rTo" maxlength="60" value="Home"></div>
+    <div class="field"><label for="rFrom">From, a name for your circle (optional)</label><input id="rFrom" maxlength="60" placeholder="Kuu Bar"></div>
+    <div class="field"><label for="rTo">Going to, a name for your circle (optional)</label><input id="rTo" maxlength="60" value="Home"></div>
     <div class="field"><span class="lab">Pick the destination on the map (optional)</span><div class="map" id="rideMap" style="height:170px"></div><p class="small muted" id="rideEst">Tap the map to get a rough time. You can change it.</p></div>
-    <p class="small muted">Fill in only what you want. The ride time is enough.</p>
+    <p class="small muted">The map sets the time. The names are just for your circle. Fill in only what you want, the ride time is enough.</p>
     <div class="field"><span class="lab">Ride time</span><div class="pick" id="rMin">${[10, 15, 20, 30, 45].map((m) => `<button class="${m === 20 ? 'on' : ''}" data-act="pick-one" data-v="${m}">${m} min</button>`).join('')}</div><input id="rMinOther" type="number" min="1" max="90" inputmode="numeric" placeholder="Other, in minutes (up to 90)" style="margin-top:8px"></div>
     <button class="btn block" data-act="ride-go">${ic('car')}Share ride with my circle</button>`);
-  S.rideDest = null; S.rideFrom = null; S.rideTouched = false;
+  S.rideDest = null; S.rideFrom = null; S.rideTouched = false; S.rideLink = null;
+  const bt = $('#rBolt');
+  if (bt) bt.addEventListener('input', () => {
+    const r = boltParse(bt.value), msg = $('#rBoltMsg'); S.rideLink = r ? r.link : null;
+    if (!r) { if (msg) msg.textContent = bt.value.trim() ? 'I could not find a Bolt ride link in that message.' : 'In Bolt, tap Share ride status and copy the message. sis. reads the car, the time, the place and the link.'; return; }
+    if (r.plate) $('#rPlate').value = r.plate;
+    if (r.to) $('#rTo').value = r.to;
+    if (r.min) { S.rideTouched = true; document.querySelectorAll('#rMin button').forEach((b) => b.classList.remove('on')); $('#rMinOther').value = String(r.min); }
+    if (msg) msg.textContent = 'Read it. Please check the details below.';
+  });
   setTimeout(rideMapInit, 80);
 }
 async function rideMapInit() {
@@ -1663,8 +1687,8 @@ document.addEventListener('click', async (e) => {
         if (m && m.image_path) sb.storage.from(BUG_BUCKET).remove([m.image_path]);
         const d = await fetchBugs(); if (d) renderBugs(d); return;
       }
-      case 'home': if (needGroup()) return; if (!await updateMe({ status: 'home', walk_deadline: null, walk_to: null, sos: false, place: null })) return; stopSharing(true); render(); toast("Home status saved to your circle", 'home'); return;
-      case 'ok': if (!await updateMe({ walk_deadline: null, walk_to: null })) return; render(); toast("OK status saved to your circle"); return;
+      case 'home': if (needGroup()) return; if (!await updateMe({ status: 'home', walk_deadline: null, walk_to: null, ride_link: null, sos: false, place: null })) return; stopSharing(true); render(); toast("Home status saved to your circle", 'home'); return;
+      case 'ok': if (!await updateMe({ walk_deadline: null, walk_to: null, ride_link: null })) return; render(); toast("OK status saved to your circle"); return;
       case 'add5': { const me = myRow(); const base = Math.max(Date.now(), new Date(me.walk_deadline).getTime()); if (!await updateMe({ walk_deadline: new Date(base + 5 * 60000).toISOString() })) return; render(); toast('Added 5 minutes', 'clock'); return; }
       case 'walk': if (needGroup()) return; return walkSheet();
       case 'walk-go': { const min = +(picked('#wMin') || 15), to = $('#wTo').value.trim() || 'Home'; closeSheet(); await updateMe({ status: 'on_way', walk_to: to, place: null, walk_deadline: new Date(Date.now() + min * 60000).toISOString() }); if (shareRule('trips')) startSharing(true); render(); $('#main').scrollTop = 0; toast('Your circle is with you', 'nav'); return; }
@@ -1681,11 +1705,11 @@ document.addEventListener('click', async (e) => {
       case 'call-end': clearInterval(callT); $('#callLayer').innerHTML = ''; return;
       case 'notify': if ('Notification' in window && Notification.permission === 'default') { const r = await Notification.requestPermission(); if (r === 'granted') await pushEnable(); toast(r === 'granted' ? 'Alerts are on' : 'Alerts stay off', r === 'granted' ? 'bell' : 'alert'); render(); } else if (!('Notification' in window)) toast('Add Sis to your home screen to get alerts', 'bell'); return;
       case 'arrived': if (needGroup()) return; return arrivedSheet();
-      case 'arrived-go': { const place = $('#aPlace').value.trim() || 'Arrived safely', withLoc = $('#aLoc').checked; closeSheet(); let patch = { status: 'out', place, walk_deadline: null, walk_to: null }; if (withLoc) { const p = await locateOnce(); if (p) patch = { ...patch, ...p, located_at: new Date().toISOString() }; else toast('Could not get your location', 'alert'); } await updateMe(patch); render(); toast('Your circle knows you arrived'); return; }
+      case 'arrived-go': { const place = $('#aPlace').value.trim() || 'Arrived safely', withLoc = $('#aLoc').checked; closeSheet(); let patch = { status: 'out', place, walk_deadline: null, walk_to: null, ride_link: null }; if (withLoc) { const p = await locateOnce(); if (p) patch = { ...patch, ...p, located_at: new Date().toISOString() }; else toast('Could not get your location', 'alert'); } await updateMe(patch); render(); toast('Your circle knows you arrived'); return; }
       case 'date': if (needGroup()) return; return dateSheet();
       case 'date-go': { const who = $('#dWho').value.trim(), where = $('#dWhere').value.trim(), [hh, mm] = ($('#dTime').value || '22:00').split(':').map(Number); const d = new Date(); d.setHours(hh, mm, 0, 0); if (d < new Date()) d.setDate(d.getDate() + 1); const live = $('#dLoc').checked; closeSheet(); await updateMe({ status: 'out', place: where || null, walk_to: `Date${who ? ' with ' + who : ''}`, walk_deadline: d.toISOString() }); if (live) startSharing(true); render(); toast(`Check-in set for ${fmtTime(d)}`, 'heart'); return; }
       case 'ride': if (needGroup()) return; return rideSheet();
-      case 'ride-go': { const plate = $('#rPlate').value.trim().toUpperCase(), from = $('#rFrom').value.trim(), dest = $('#rTo').value.trim(), min = (() => { const o = parseInt(($('#rMinOther') || {}).value, 10); return o > 0 ? Math.min(90, o) : +(picked('#rMin') || 20); })(), to = from && dest ? (from + ' → ' + dest) : dest || (from ? 'From ' + from : null); ls.set('rideDest', S.rideDest ? JSON.stringify({ lat: S.rideDest.lat, lng: S.rideDest.lng, until: Date.now() + (min + 30) * 60000 }) : ''); closeSheet(); await updateMe({ status: 'on_way', place: plate ? `Taxi ${plate}` : 'In a taxi', walk_to: to, walk_deadline: new Date(Date.now() + min * 60000).toISOString() }); if (shareRule('trips')) startSharing(true); render(); toast('Your circle is following your ride', 'car'); return; }
+      case 'ride-go': { const plate = $('#rPlate').value.trim().toUpperCase(), from = $('#rFrom').value.trim(), dest = $('#rTo').value.trim(), min = (() => { const o = parseInt(($('#rMinOther') || {}).value, 10); return o > 0 ? Math.min(90, o) : +(picked('#rMin') || 20); })(), to = from && dest ? (from + ' → ' + dest) : dest || (from ? 'From ' + from : null); ls.set('rideDest', S.rideDest ? JSON.stringify({ lat: S.rideDest.lat, lng: S.rideDest.lng, until: Date.now() + (min + 30) * 60000 }) : ''); closeSheet(); await updateMe({ status: 'on_way', place: plate ? `Taxi ${plate}` : 'In a taxi', walk_to: to, ride_link: S.rideLink || null, walk_deadline: new Date(Date.now() + min * 60000).toISOString() }); if (shareRule('trips')) startSharing(true); render(); toast('Your circle is following your ride', 'car'); return; }
       case 'trip': await go('sisterhood'); return newEventSheet('trip');
       case 'filter': S.placeFilter = arg; document.querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', c.dataset.act === 'filter:' + arg)); $('#placeList').innerHTML = placeListHTML(); updatePlacesMap(); return;
       case 'place': return placeSheet(arg);
