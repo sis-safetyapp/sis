@@ -90,6 +90,20 @@ function fail(e) {
 // config.js mode: 'demo' (the public demo, never signs in) or 'live' (the tester app with Google sign-in).
 const SIS_MODE = (window.SIS_CONFIG || {}).mode;
 const LIVE = SIS_MODE === 'live' || (SIS_MODE !== 'demo' && /[?&](live|join)=/.test(location.search));
+// Embedded in the landing page phone (/demo/?embed=1): the demo never asks for the real location,
+// it always sits at the demo spot in Tallinn. Only in demo mode, never in the live app.
+const EMBED = SIS_MODE === 'demo' && /[?&]embed=1/.test(location.search);
+if (EMBED) {
+  const fakePos = () => ({ coords: { latitude: 59.4372, longitude: 24.7454, accuracy: 20, speed: null, heading: null, altitude: null, altitudeAccuracy: null }, timestamp: Date.now() });
+  const watchers = {}; let watchSeq = 0;
+  try {
+    Object.defineProperty(navigator, 'geolocation', { configurable: true, value: {
+      getCurrentPosition: (ok) => { setTimeout(() => ok(fakePos()), 120); },
+      watchPosition: (ok) => { const id = ++watchSeq; setTimeout(() => ok(fakePos()), 120); watchers[id] = setInterval(() => ok(fakePos()), 5000); return id; },
+      clearWatch: (id) => { clearInterval(watchers[id]); delete watchers[id]; }
+    } });
+  } catch (e) { /* keep the browser's own geolocation */ }
+}
 function demoDb() {
   const now = Date.now(), iso = (min) => new Date(now + min * 60000).toISOString();
   const at = (north, east) => ({ lat: 59.4372 + north / 111320, lng: 24.7454 + east / 56640 });
@@ -97,16 +111,16 @@ function demoDb() {
   const review = (place_id, author, feel, good, bad, body, min) => ({ id: 'r' + Math.random().toString(36).slice(2, 9), place_id, user_id: 'u-' + author.toLowerCase(), author, feel, good, bad, body, created_at: iso(-min) });
   const place = (id, name, kind, area, north, east) => ({ id, name, kind, area, ...at(north, east), created_at: iso(-60 * 24 * 7) });
   const T = {
-    profiles: [{ id: 'me', name: ls.get('name') || 'Jana', phone: null }],
+    profiles: [{ id: 'me', name: ls.get('name') || 'Iana', phone: null }],
     groups: [
       { id: 'g1', code: 'DEMO01', name: 'My sisters', ends_at: null, created_by: 'me' },
       { id: 'g2', code: 'NIGHT7', name: 'Friday night out', ends_at: iso(300), created_by: 'u-eva' }
     ],
     group_members: [
-      member('g1', 'me', ls.get('name') || 'Jana', {}),
+      member('g1', 'me', ls.get('name') || 'Iana', {}),
       member('g1', 'u-reem', 'Nika', { status: 'on_way', walk_to: 'Home', walk_deadline: iso(38), sharing: true, ...at(120, -90), accuracy: 12, located_at: iso(-1) }),
       member('g1', 'u-swathi', 'Swathi', { place: 'Old Town', sharing: true, ...at(-180, 160), accuracy: 15, located_at: iso(-3) }),
-      member('g2', 'me', ls.get('name') || 'Jana', {}),
+      member('g2', 'me', ls.get('name') || 'Iana', {}),
       member('g2', 'u-swathi', 'Swathi', { place: 'Kuu Bar', sharing: true, ...at(-30, 40), accuracy: 15, located_at: iso(-2) })
     ],
     places: [
@@ -166,7 +180,7 @@ function demoDb() {
   [['e1', ['Kati', 'Maria', 'Sofia']], ['e2', ['Liis']], ['e3', ['Kati']]].forEach(([eid, names]) => names.forEach((n) => T.event_members.push({ event_id: eid, user_id: 'u-' + n.toLowerCase() + eid, name: n })));
 
   /* richer demo data: a lived-in account */
-  const myName = ls.get('name') || 'Jana';
+  const myName = ls.get('name') || 'Iana';
   T.group_members.push(
     member('g1', 'u-mia', 'Mia', { place: 'Café Lumi', sharing: true, ...at(90, 170), accuracy: 14, located_at: iso(-2) }),
     member('g1', 'u-sofia', 'Sofia', { place: 'Gym' }),
@@ -783,6 +797,7 @@ async function pushEnable() {
   } catch (e) { console.warn('Push setup failed:', e); return false; }
 }
 function notifyPromptHTML() {
+  if (EMBED) return '';
   if (!('Notification' in window) || Notification.permission !== 'default' || !S.gid) return '';
   return `<button class="note info" data-act="notify" style="text-align:left">${ic('bell')}<span>Turn on alerts so you hear it when a sister needs you</span></button>`;
 }
