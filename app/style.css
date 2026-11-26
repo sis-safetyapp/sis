@@ -370,3 +370,18 @@ body.night .hzwalk{color:#1B1535}
 /* folded map bar: keep the + (report) button visible */
 .hzbar.col .hzmore{display:flex}
 .hzbar.col .hzmore button:not([data-act="hz-new"]){display:none}
+
+/* alerts float over the map (wine, see-through) instead of pushing it down */
+#banners{position:absolute;left:10px;right:72px;top:58px;z-index:600;max-height:55%;overflow:auto;gap:8px}
+#banners:empty,#sosOver:empty{display:none}
+.banner{background:rgba(142,44,78,.58);border:1px solid #FF6B8A;color:#fff;padding:10px 12px;gap:6px;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.banner.late{background:rgba(110,72,12,.6);border:1px solid var(--warn);color:#fff}
+.banner .btn.white{background:rgba(255,255,255,.9);color:#7a2342}
+.banner .bx{font-size:22px;line-height:1;color:#fff;padding:0 4px;opacity:.9}
+#sosOver{position:absolute;left:10px;right:10px;bottom:78px;z-index:600}
+.sosover{background:rgba(96,28,58,.6);border:1px solid #FF6B8A;border-radius:18px;padding:10px;color:#fff;display:flex;flex-direction:column;gap:8px;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.sosover .row{gap:8px}
+
+/* chat rows: swipe buttons stay hidden until you swipe */
+.cacts{opacity:0;transition:opacity .15s}
+.crow.open .cacts,.crow:has(.cmain.drag) .cacts{opacity:1}

@@ -638,14 +638,13 @@ function checkAlerts() {
 }
 function bannersHTML() {
   return alertsList().map(({ kind, key, m }) => {
-    const seen = m.lat != null ? `<button class="btn sm ${kind === 'sos' ? 'white' : ''}" data-act="see-member:${m.user_id}">${ic('pin')}See on map</button>` : '<span class="small">No location shared</span>';
-    const call = m.phone ? `<a class="btn sm ${kind === 'sos' ? 'white' : 'ghost'}" href="tel:${esc(m.phone)}">${ic('phone')}Call ${esc(m.name)}</a>` : '';
-    const ext = (m.lat != null ? `<a class="tiny" href="${mapsLink(m.lat, m.lng)}" target="_blank" rel="noopener">Open in Maps</a>` : '') + (boltOk(m) ? ` <a class="tiny" href="${esc(m.ride_link)}" target="_blank" rel="noopener">Open Bolt ride</a>` : '');
+    const seen = m.lat != null ? `<button class="btn sm white" data-act="see-member:${m.user_id}">${ic('pin')}See on map</button>` : '<span class="small">No location shared</span>';
+    const call = m.phone ? `<a class="btn sm white" href="tel:${esc(m.phone)}" aria-label="Call ${esc(m.name)}">${ic('phone')}Call</a>` : '';
+    const bolt = boltOk(m) ? `<a class="btn sm white" href="${esc(m.ride_link)}" target="_blank" rel="noopener">Bolt ride</a>` : '';
     return `<div class="banner ${kind === 'late' ? 'late' : ''}" role="alert">
-      <div class="row">${ic('alert')}<b>${kind === 'sos' ? `${esc(m.name)} sent an SOS` : `${esc(m.name)} hasn't checked in`}</b></div>
+      <div class="row between"><div class="row">${ic('alert')}<b>${kind === 'sos' ? `${esc(m.name)} sent an SOS` : `${esc(m.name)} hasn't checked in`}</b></div><button class="bx" data-act="alert-hide:${esc(key)}" aria-label="Dismiss">×</button></div>
       <span class="small">${kind === 'sos' ? `${ago(m.sos_at)}${m.located_at ? ' · location updated ' + ago(m.located_at) : ''}` : `Due by ${fmtTime(m.walk_deadline)}${m.walk_to ? ' · ' + esc(m.walk_to) : ''}`}</span>
-      <div class="row" style="flex-wrap:wrap">${seen}${call}</div>
-      <div class="row" style="gap:14px">${ext}<button class="tiny" data-act="alert-hide:${esc(key)}">Dismiss</button></div></div>`;
+      <div class="row" style="flex-wrap:wrap;gap:6px">${seen}${call}${bolt}</div></div>`;
   }).join('');
 }
 
@@ -729,8 +728,7 @@ function membersHTML() {
     const mine = m.user_id === S.user.id;
     return `<div class="item">${avatar(m.name, 'sm')}<span class="grow"><span class="t">${mine ? 'You' : esc(m.name)}</span><br><span class="s">${memberSub(m)}</span></span>${statusPill(m)}
       ${!mine && boltOk(m) ? `<a class="btn sm ghost" href="${esc(m.ride_link)}" target="_blank" rel="noopener" aria-label="Open ${esc(m.name)}'s Bolt ride">Bolt</a>` : ''}
-      ${!mine && m.phone ? `<a class="btn sm ghost" href="tel:${esc(m.phone)}" aria-label="Call ${esc(m.name)}">${ic('phone')}</a>` : ''}
-      ${!mine && m.lat != null ? `<a class="btn sm ghost" href="${mapsLink(m.lat, m.lng)}" target="_blank" rel="noopener" aria-label="Open ${esc(m.name)} in maps">${ic('pin')}</a>` : ''}</div>`;
+      ${!mine && m.phone ? `<a class="btn sm ghost" href="tel:${esc(m.phone)}" aria-label="Call ${esc(m.name)}">${ic('phone')}</a>` : ''}</div>`;
   }).join('') + (S.members.length === 1 ? `<div class="item"><span class="grow small muted">Nobody else here yet. Send the invite link to your friends.</span><button class="btn sm" data-act="invite">${ic('link')}Invite</button></div>` : '');
 }
 function groupCardHTML(withMap) {
@@ -747,12 +745,14 @@ function groupCardHTML(withMap) {
     ${S.groups.length > 1 ? `<button class="link" style="align-self:flex-start" data-act="tab:me">Switch group</button>` : ''}
   </div>`;
 }
+function sosOverHTML() {
+  const me = myRow(); if (!me || !me.sos) return '';
+  return `<div class="sosover" role="alert"><div class="row"><span class="dot live"></span><b>SOS is on</b><span class="small">Your sisters see you live</span></div>
+    <div class="row"><button class="btn danger" style="flex:1" data-act="call-112">${ic('phone')}Call 112</button><button class="btn safe" style="flex:1" data-act="sos-cancel">${ic('check')}I'm safe now</button></div></div>`;
+}
 function myCardHTML() {
   const me = myRow(); if (!me) return '';
-  if (me.sos) return `<div class="card stack alertcard"><div class="row" style="color:var(--danger)">${ic('alert')}<h2>SOS is on</h2></div>
-    <p class="small">Your sisters see your live location.</p>
-    <button class="btn danger block" data-act="call-112">${ic('phone')}Call 112</button>
-    <button class="btn safe block" data-act="sos-cancel">${ic('check')}I'm safe now</button></div>`;
+  if (me.sos) return '';
   if (!me.walk_deadline) return '';
   const dl = new Date(me.walk_deadline).getTime(), now = Date.now();
   if (now < dl) {
@@ -862,6 +862,8 @@ function hzInfoSheet(id) {
 }
 function aroundCardHTML() {
   return `<div class="card hzcard"><div class="hzmap"><div class="map big" id="aroundMap"></div>
+    <div id="banners" class="stack">${bannersHTML()}</div>
+    <div id="sosOver">${sosOverHTML()}</div>
     <button class="hzloc" data-act="around-locate" aria-label="Show my location">${ic('locate')}</button>
     <div class="hzbar${ls.get('hzcol') === '1' ? ' col' : ''}">
       <div class="hzmore">
@@ -877,7 +879,6 @@ function aroundCardHTML() {
 }
 function homeScreen() {
   return `<section class="screen homemap">
-    <div id="banners" class="stack">${bannersHTML()}</div>
     <div id="myCard">${myCardHTML()}</div>
     ${aroundCardHTML()}
     ${notifyPromptHTML()}
@@ -1187,6 +1188,7 @@ function refreshLive() {
   const b = $('#banners'); if (b) b.innerHTML = bannersHTML();
   const ml = $('#memberList'); if (ml) ml.innerHTML = membersHTML();
   const mc = $('#myCard'); if (mc && !mc.contains(document.activeElement)) mc.innerHTML = myCardHTML();
+  const so = $('#sosOver'); if (so) so.innerHTML = sosOverHTML();
   const sh = $('#shareBtn'); if (sh) sh.innerHTML = ic('locate') + (myRow()?.sharing ? 'Stop sharing' : 'Share location');
   updateGroupMap(); renderTabs();
 }
