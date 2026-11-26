@@ -83,7 +83,7 @@ const sheetHead = (title) => `<div class="row between"><h2>${title}</h2><button 
 function fail(e) {
   console.error(e);
   if (e && e.code === '23503' && /profiles_id_fkey/.test(e.message || '')) { toast('Your sign-in is out of date. Signing you out.', 'alert'); sb.auth.signOut().finally(() => setTimeout(() => location.reload(), 1200)); return; }
-  toast('Something went wrong. Please try again, or write to us at sis.safetyapp@gmail.com', 'alert');
+  toast('Something went wrong. Please try again, or write to us at yoursis.app@gmail.com', 'alert');
 }
 
 /* ---------------- demo data: opens without sign-up (add ?live=1 for the real database) ---------------- */
@@ -359,7 +359,7 @@ async function init() {
   if (authErr) history.replaceState(null, '', `${location.pathname}?live=1`);
   try {
     const { data: { session } } = await sb.auth.getSession();
-    if (!session) { renderWelcome(); if (authErr) toast('This beta is invite-only right now. Write to us at sis.safetyapp@gmail.com to get access.', 'alert'); return; }
+    if (!session) { renderWelcome(); if (authErr) toast('This beta is invite-only right now. Write to us at yoursis.app@gmail.com to get access.', 'alert'); return; }
     await afterAuth(session.user);
   } catch (e) { fail(e); renderWelcome(); }
 }
@@ -1098,7 +1098,7 @@ function meScreen() {
       <a class="item" href="../privacy/" target="_blank" rel="noopener"><span class="grow"><span class="t">Privacy policy</span><br><span class="s">What we keep and how to delete it</span></span></a>
       ${LIVE ? '<button class="item" data-act="bug-open"><span class="grow"><span class="t">Tester chat</span><br><span class="s">Report a bug and share a screenshot</span></span></button>' : ''}
       <a class="item" href="https://tally.so/r/4a7DrO" target="_blank" rel="noopener"><span class="grow"><span class="t">Tell us what you think</span><br><span class="s">Short and optional, it helps us a lot</span></span></a>
-      <a class="item" href="mailto:sis.safetyapp@gmail.com"><span class="grow"><span class="t">Contact us</span><br><span class="s">sis.safetyapp@gmail.com</span></span></a>
+      <a class="item" href="mailto:yoursis.app@gmail.com"><span class="grow"><span class="t">Contact us</span><br><span class="s">yoursis.app@gmail.com</span></span></a>
     </div>
     ${LIVE ? '<button class="btn ghost block" data-act="signout">Sign out on this device</button><button class="btn ghost block" data-act="delete-account">Delete my account and data</button>' : ''}
   </section>`;

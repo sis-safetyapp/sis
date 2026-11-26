@@ -483,3 +483,39 @@ details p { padding: 0 22px 20px; color: var(--muted); }
 .phones .mock-phone{position:absolute;margin:0;flex:none;width:56%;max-width:none;scroll-snap-align:none}
 .phones .mock-phone:first-child{left:0;top:6%;z-index:2}
 .phones .mock-phone:last-child{right:0;top:0;z-index:1;filter:brightness(.82)}
+
+
+/* Marks on the map (hazards) */
+.hz-block { border-color: #C98A12; background: linear-gradient(135deg, rgba(201,138,18,.14), rgba(207,53,64,.12)); }
+.hz-block .nearby-when { color: #F0B84A; }
+.hzmap { position: relative; height: 200px; border-radius: 18px; background: #1d1a2b; overflow: hidden; }
+.hzmap .road { position: absolute; background: #3a3656; border-radius: 4px; }
+.hzmap .r1 { left: -10%; top: 38%; width: 120%; height: 8px; transform: rotate(-8deg); }
+.hzmap .r2 { left: 30%; top: -10%; width: 8px; height: 120%; transform: rotate(6deg); }
+.hzmap .r3 { left: 72%; top: -10%; width: 6px; height: 120%; transform: rotate(-4deg); }
+.hzmap .me { position: absolute; left: 22%; top: 62%; width: 14px; height: 14px; margin: -7px; border-radius: 50%; background: #3b82f6; box-shadow: 0 0 0 4px #fff; }
+.hzmap .pin { position: absolute; display: grid; place-items: center; width: 28px; height: 28px; margin: -14px; border-radius: 50% 50% 50% 4px; border: 2px solid #fff; font-size: 13px; font-weight: 800; color: #fff; animation: pop 10s infinite; opacity: 0; }
+.hzmap .p1 { left: 46%; top: 30%; background: #CF3540; }
+.hzmap .p2 { left: 76%; top: 58%; background: #C98A12; animation-delay: .5s; }
+.hzmap .p3 { left: 60%; top: 78%; background: #CF3540; animation-delay: 1s; }
+.hzmap .hz-card { position: absolute; left: 10px; right: 10px; bottom: 10px; margin: 0; padding: 8px 11px; border-radius: 14px; background: var(--night-3); font-size: 12px; line-height: 1.35; color: var(--muted); opacity: 0; animation: rb 10s 2.5s infinite; }
+.hzmap .hz-card b { display: block; font-size: 13px; color: #fff; }
+.hzmap .hz-card span { display: flex; gap: 6px; margin-top: 6px; }
+.hzmap .hz-card i { font-style: normal; padding: 3px 9px; border-radius: 999px; background: rgba(255,255,255,.1); color: #fff; font-size: 11px; font-weight: 700; }
+.nearby + .nearby { margin-top: 16px; }
+@media (max-width: 760px) { .hzmap { grid-column: 1 / -1; } }
+@media (max-width: 520px) { .hzmap { grid-column: auto; } }
+@media (prefers-reduced-motion: reduce) { .hzmap .pin, .hzmap .hz-card { animation: none; opacity: 1; } }
+
+/* Six features: 3 columns, then 2, then 1, with no empty cells */
+.feature-grid.six { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 900px) { .feature-grid.six { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .feature-grid.six { grid-template-columns: 1fr; } }
+
+/* Team titles with a tooltip on hover or tap */
+.team-av.t3 { background: #b0507a; }
+.tip { position: relative; text-decoration: underline dotted; text-underline-offset: 3px; cursor: help; border-radius: 4px; }
+.tip:focus-visible { outline: 2px solid var(--lilac); outline-offset: 2px; }
+.tip::after { content: attr(data-tip); position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translate(-50%, 4px); white-space: nowrap; padding: 6px 10px; border-radius: 10px; background: #fff; color: var(--night); font-size: 13px; font-weight: 700; opacity: 0; pointer-events: none; transition: opacity .15s, transform .15s; z-index: 2; }
+.tip:hover::after, .tip:focus::after { opacity: 1; transform: translate(-50%, 0); }
+@media (prefers-reduced-motion: reduce) { .tip::after { transition: none; } }
